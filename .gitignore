@@ -1,0 +1,28 @@
+node_modules/
+# `lib/` IS tracked: a Git market entry must ship its built main entry at the
+# pinned commit and declare no `scripts.prepare`. scripts/verify-lib-committed.mjs
+# guards against source/build drift.
+coverage/
+release-artifact/
+*.tgz
+.pnpm-store/
+.npm/
+.fleet/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Verification artifacts: the isolated mount report lives in docs/evidence/, and
+# the browser harness scratch is never committed.
+verify-isolated-*.json
+verify-market-install.json
+.chrome-profile/
+.chrome-crash/
+.preview-url.txt
+.preview-state.json
+.preview-stop

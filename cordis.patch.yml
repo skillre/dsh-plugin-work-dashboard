@@ -1,0 +1,23 @@
+# One Host row for this bundle. The Host half owns the disposable git cache,
+# the YAML parse and the gap scan, and exposes them through one exact Connection
+# route; the Client half of the same package registers the sidebar entry and the
+# dashboard page.
+#
+# The dashboard is multi-module by design: POC Operations is the first module and
+# lives in the same Host row, so adding a module later does not need a new row.
+#
+# Every config key is optional and schema-validated at mount time; the user's
+# profile may override this row's configuration (see README).
+- insert:
+    - id: skillre-work-dashboard
+      name: '@skillre/dsh-plugin-work-dashboard'
+      config:
+        # owner/name of the GitHub repository that holds projects/*.yaml.
+        repository: skillre/workbranch
+        # Wiped at mount, rebuilt on demand. Must not be a directory this plugin
+        # did not create; a pre-existing non-empty directory fails loudly.
+        cacheRoot: ~/.dsh/cache/work-dashboard
+        defaultBranch: main
+        cloneTimeoutMs: 120000
+        fetchTimeoutMs: 60000
+        staleDays: 30

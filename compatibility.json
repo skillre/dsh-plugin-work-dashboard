@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "package": "@skillre/dsh-plugin-work-dashboard",
+  "verified": [
+    {
+      "dsh": "0.2.2-rc.1",
+      "verifiedAt": "2026-11-05",
+      "result": "passed",
+      "checks": [
+        "dump-config",
+        "bounded-startup",
+        "packed-install",
+        "api-cold-cache-empty",
+        "api-refresh-clone",
+        "api-board-computed",
+        "api-detail",
+        "api-refresh-fetch",
+        "api-unknown-project",
+        "api-auth-fence",
+        "cache-absent-before-mount",
+        "cache-is-real-clone",
+        "cache-credential-not-persisted",
+        "cache-wiped-on-restart",
+        "api-refresh-after-restart",
+        "api-export-single-form",
+        "export-is-self-contained",
+        "api-export-batch-form",
+        "api-export-blank-form",
+        "export-form-yaml-round-trips",
+        "export-form-round-trip-is-lossless",
+        "api-risk-board-sorted",
+        "api-global-timeline-sorted",
+        "api-timeline-reports-silent-projects",
+        "web-ui",
+        "web-ui-sidebar-entry",
+        "web-ui-panel-selection",
+        "web-ui-module-rail",
+        "web-ui-empty-state",
+        "web-ui-refresh-clone",
+        "web-ui-four-dimension-cells",
+        "web-ui-stage-track",
+        "web-ui-pending-order",
+        "web-ui-detail-page",
+        "web-ui-refresh-settings",
+        "web-ui-localstorage-persistence",
+        "web-ui-failure-banner",
+        "web-ui-export-page",
+        "web-ui-risk-board",
+        "web-ui-global-timeline",
+        "web-ui-light-theme",
+        "web-ui-dark-theme",
+        "web-ui-no-console-errors",
+        "no-import-path",
+        "automatic-jsx-runtime"
+      ],
+      "notes": "Packed tarball 0.1.0 installed into an owned, disposable, non-Desktop web profile created from the shipped template (DSH 0.2.2-rc.1). This release renames the plugin to 工作看板 / @skillre/dsh-plugin-work-dashboard, restructures it as a multi-module container whose first module is POC 运营, deletes the entire 导入数据 module (Host actions, pr/validate/diff/template modules, import and create pages, and the draft-PR write path), and rebuilds the visual layer. dsh --profile <test> --dump-config composed the row; a bounded real startup served the Web app; the authenticated browser transport exercised the exact /api/skillre-work-dashboard/execute route: a cold cache reported cacheReady:false with no automatic pull, a manual refresh cloned the ledger, the board computed the four-dimension flags and gap findings with 做成了但没有下一步 first, a second refresh used fetch + reset --hard, detail returned five gate rows and three timeline rounds, an unauthenticated request returned 401, and export produced a self-contained HTML form whose own YAML serializer round-tripped with ZERO diff against the ledger. Cleanup stopped every owned process, removed the owned profile root and verified it was gone. The real DSH Web UI was then driven in headless Chromium: 50/50 assertions passed in both light and dark themes — the 工作看板 sidebar entry selected the panel, the page title showed the module name POC 运营 with the shell identity in an eyebrow and a module tab rail, the empty state appeared on first paint, Refresh rendered the board with four separate dimension cells per project, the detail page, the four refresh cadences, a forced failure with retry, the export page producing a self-contained batch form, the severity-ordered risk board and the newest-first global timeline all behaved, with no uncaught page errors. A real defect was found and fixed during this verification: the client bundle used the classic JSX transform with no React binding in scope, so the sidebar entry crashed with 'React is not defined'; the build now emits the automatic react/jsx-runtime, pinned by tests/client-bundle.spec.ts.",
+      "evidence": [
+        "docs/evidence/isolated-mount-0.1.0.json",
+        "docs/evidence/ui-verification.json",
+        "docs/evidence/work-dashboard-empty.png",
+        "docs/evidence/work-dashboard-board.png",
+        "docs/evidence/work-dashboard-detail.png",
+        "docs/evidence/work-dashboard-light.png",
+        "docs/evidence/work-dashboard-dark.png",
+        "tests/gap.spec.ts",
+        "tests/store.spec.ts",
+        "tests/transport.spec.ts",
+        "tests/plugin.spec.ts",
+        "tests/client-bundle.spec.ts",
+        "tests/view.spec.tsx",
+        "tests/preferences.spec.ts",
+        "tests/config.spec.ts",
+        "tests/form.spec.ts",
+        "tests/risks.spec.ts",
+        "tests/timeline.spec.ts"
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "dsh": "0.2.2-rc.1",
+      "observedAt": "2026-11-05",
+      "install": "packed tarball installed into an owned, disposable, non-Desktop DSH web profile",
+      "checks": [
+        "artifact-envelope",
+        "host-contracts",
+        "packed-payload-bytes"
+      ],
+      "evidence": {
+        "artifact-envelope": "tests/client-bundle.spec.ts loads lib/client.js through window.__ModuleLoader__.load and asserts one registration, only the seeded react modules, the automatic JSX runtime, the Cordis client contract and both slot registrations",
+        "host-contracts": "tests/transport.spec.ts drives the exact Fetch route with real Request objects; tests/store.spec.ts covers the YAML parse; tests/gap.spec.ts pins all eight rules",
+        "packed-payload-bytes": "scripts/verify-isolated.mjs checks every required packed file exists in the installed package"
+      },
+      "pending": [
+        "desktop-client"
+      ],
+      "pendingDetail": "Verified in the standalone DSH Web application. The Desktop Client (Electron) was not exercised: its profile is application-managed and cannot be driven by this CLI-based harness."
+    }
+  ]
+}
