@@ -1,16 +1,16 @@
 {
-  "profile": "poc-market-0xtyQf",
+  "profile": "poc-market-V45hUr",
   "indexUrl": "https://skillre.github.io/dsh-plugin-market/index.json",
-  "spec": "git+https://github.com/skillre/dsh-plugin-poc-console#beeeb961477494a03a025c5607daab397eda8d20",
+  "spec": "git+https://github.com/skillre/dsh-plugin-work-dashboard#b8f40b46593721daedc1231e28c4f66fa15a234d",
   "checks": [
     "live-index-has-entry",
     "live-index-pins-commit",
-    "dsh --profile poc-market-0xtyQf --from-default-profile",
+    "dsh --profile poc-market-V45hUr --from-default-profile",
     "profile-created",
-    "dsh plugin --profile poc-market-0xtyQf",
+    "dsh plugin --profile poc-market-V45hUr",
     "market-spec-installed",
     "dependency-and-selection",
-    "dsh --profile poc-market-0xtyQf --patch",
+    "dsh --profile poc-market-V45hUr --patch",
     "dump-config",
     "packed-payload-present",
     "bounded-startup",
@@ -20,14 +20,14 @@
     "api-timeline"
   ],
   "cleanup": {
-    "ownedRoot": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-poc-market-install-0xtyQf",
+    "ownedRoot": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-poc-market-install-V45hUr",
     "processesStopped": true,
     "rootRemoved": true,
     "verified": true
   },
   "entry": {
     "version": "0.1.0",
-    "commit": "beeeb961477494a03a025c5607daab397eda8d20",
+    "commit": "b8f40b46593721daedc1231e28c4f66fa15a234d",
     "engines": {
       "dsh": ">=0.2.2-rc.1 <0.3.0"
     }
