@@ -79,20 +79,6 @@ function stageLabel(t: Translate, key: string): string {
   return key
 }
 
-/** A one-line summary of the newest progress entry, for the card body. */
-function progressLine(project: ProjectSummary): string {
-  if (project.progressCount === 0) return ''
-  return project.lastProgressSummary === '' ? t_EMPTY : project.lastProgressSummary
-}
-
-/**
- * The placeholder for an empty summary.
- *
- * `progressLine` runs before `t` is threaded through in some call sites; the
- * caller substitutes the localized marker instead of this sentinel.
- */
-const t_EMPTY = '\u0000'
-
 /** The gap badge on a card: severity first, then the count, then nothing. */
 function GapBadge({ project, t }: { project: ProjectSummary; t: Translate }): JSX.Element | null {
   if (project.gapCount === 0) return null
