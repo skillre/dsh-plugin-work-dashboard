@@ -11,7 +11,8 @@
  * at the top would bury the risks someone actually assessed as serious.
  */
 
-import { normalizeStage, text } from './gap.js'
+import { normalizeStage, scanGaps, text } from './gap.js'
+import type { ScanOptions } from './gap.js'
 import type { PocRecord, RiskBoard, RiskRow } from './types.js'
 
 /** Severity rank: higher sorts first. A blank level ranks below `low`. */
@@ -28,21 +29,15 @@ export function riskRank(level: string): number {
   }
 }
 
-/** Count how many high-severity gaps a project carries, for board context. */
-function gapCounts(record: PocRecord): { total: number; high: number } {
-  const result = record.result ?? {}
-  const filled = (value: unknown): boolean => text(value) !== ''
-  let total = 0
-  let high = 0
-  const push = (isHigh: boolean): void => {
-    total += 1
-    if (isHigh) high += 1
-  }
-  if (!filled(record.why_customer_test) || !filled(record.why_we_test) || !filled(record.customer_tech_owner)) push(true)
-  if (filled(result.achievement) && !filled(result.evidence)) push(true)
-  if (filled(result.evidence) && !filled(result.recognition)) push(true)
-  if (filled(result.achievement) && !filled(result.next_milestone)) push(true)
-  return { total, high }
+/**
+ * Count the gaps a project carries, for board context.
+ *
+ * Delegates to the shared scanner so the board and the pending list can never
+ * disagree about a project's gaps.
+ */
+function gapCounts(record: PocRecord, options: ScanOptions): { total: number; high: number } {
+  const gaps = scanGaps(record, options)
+  return { total: gaps.length, high: gaps.filter((item) => item.level === 'high').length }
 }
 
 /**
@@ -52,7 +47,7 @@ function gapCounts(record: PocRecord): { total: number; high: number } {
  * order inside the record — a stable order that does not reshuffle between
  * refreshes.
  */
-export function buildRiskBoard(records: readonly PocRecord[]): RiskBoard {
+export function buildRiskBoard(records: readonly PocRecord[], options: ScanOptions): RiskBoard {
   const rows: RiskRow[] = []
   let projectsWithRisks = 0
 
@@ -60,10 +55,10 @@ export function buildRiskBoard(records: readonly PocRecord[]): RiskBoard {
     const pocId = text(record.poc_id)
     const pocName = text(record.name) === '' ? pocId : text(record.name)
     const { stage } = normalizeStage(record.stage)
-    const risks = Array.isArray(record.risks) ? record.risks : []
+    const risks = Array.isArray(record.plan?.risks) ? record.plan!.risks! : []
     if (risks.length === 0) continue
     projectsWithRisks += 1
-    const counts = gapCounts(record)
+    const counts = gapCounts(record, options)
     for (const raw of risks) {
       const value = (raw ?? {}) as Record<string, unknown>
       const level = text(value.level).toLowerCase()

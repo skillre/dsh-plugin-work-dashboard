@@ -56,7 +56,11 @@ POC 台账最容易烂在「感觉做成了」上：项目说结果达成，但�
   - **未评级排在最后**：不是「不严重」，而是还没判断；排在最前会埋掉真正被评估为严重的风险。
 - **全局时间线**：所有项目的复盘记录按日期从新到旧，附月份分布条与「完全没有时间线」的项目清单。
 
-### 导出表单
+### 导出表单（本版暂不提供）
+
+> 导出表单仍按 v1 字段建模，v3 已没有那些字段。为避免组员拿到台账读不了的 YAML，本版**隐藏了导出入口**，代码保留在 `src/form.v1-deferred.ts`，将在 P1 按 v3 重写。
+
+原设计（P1 重写目标）：
 
 - 勾选一个或多个项目 → 生成**一个自包含 HTML 文件**并下载。表单没有 CDN、没有外部字体、没有服务器，双击即可在离线机器上填写。
   - **自动保存**：`localStorage`，键由**项目集合**派生（不是生成时间），所以同一个项目集重新生成表单时能找到同一份草稿。
@@ -64,24 +68,75 @@ POC 台账最容易烂在「感觉做成了」上：项目说结果达成，但�
   - **下载真实 YAML**：不是 JSON。生成的值会按 YAML 规则正确加引号/块标量，所以组员回传的文件可以直接拿去用。
   - **批量导出**：多选项目打包进同一个表单；下载时**每个项目一个 `.yaml` 文件**（YAML 文件只能装一个项目的映射，拼接会产生重复键）。
 
-## 8 条缺口规则
+## v3 数据模型
+
+台账已从 v1 升级到 v3。v3 是**以进展流为中心**的模型：
+
+```
+① 身份      poc_id / name / org{system,company,department} / amount_wan /
+            poc_type / priority / owner / sales / tech_owner / exec_sponsor /
+            stage / status / stage_since
+② gate0     值不值得做：why_customer / why_us / decision_chain /
+            post_poc_decision / competitor / review{conclusion,reviewer,reviewed_at} /
+            missing（自动算）/ complete（自动算）
+③ plan      怎么赢：customer_pain / expected_recognition / criteria[] /
+            scenarios[] / our_edge / risks[] / gate1 / gate2{ready,prerequisites}
+④ progress  进展流（追加式，永不覆盖）★ 核心
+⑤ outcome   结论：achievement / customer_recognition / our_proof /
+            remaining_risks / conclusion{proved,recognized,next_business} /
+            business{milestone,owner,deadline,status} / overall
+```
+
+### 四维从 `outcome` 读
+
+| 维度 | 来源字段 | 性质 |
+|---|---|---|
+| 目标达成 | `outcome.achievement` | 自动推导（来自最后一条进展的 gate3_1 + completion） |
+| 证据 | `outcome.our_proof`，或最后一条进展的 `evidence[]` | 人工填 / 进展携带 |
+| 客户认可 | `outcome.customer_recognition` | 自动推导（来自最后一条进展的 customer.recognition） |
+| 下一步 | `outcome.business.milestone` | 人工填 |
+
+**四维永远四张独立卡片**，每张标注「自动推导」或「人工填」——因为 v3 里前两者由系统推导、后两者靠人填，混在一起看会分不清哪个结论可信。
+
+### 进展流（核心）
+
+每个项目的 `progress[]` 渲染成一条时间线，最新在上。一条进展包含：
+
+- `type`（内部Review / 客户阶段同步 / Checkpoint）、`seq`、`completion`
+- `goal`（这次要验证什么）、`items[]`（范围）、`actual`（实际做到什么）
+- `evidence[]`（标题 + 链接 + 类型，作为可点开的凭据）
+- `customer`（`synced_with` / `feedback` / `recognition`）
+- `gate3_1`（可证明/待补证据）、`gate3_2`（已确认/待确认）
+- `next`（`goal` / `owner` / `deadline`）
+
+**今天 23 个项目的 `progress` 都是空的**，所以进展流显示空状态「还没有进展记录 / 第一次进展后，这里会显示完整时间线」。这是正常状态，进展要靠组员用表单填。
+
+## 12 条缺口规则
 
 规则硬编码在 `src/gap.ts`（纯函数，无时钟无文件系统，全部由 `tests/gap.spec.ts` 逐条锁定）：
 
-| # | 规则 | 触发条件 | 级别 |
+| # | 规则 | 判定 | 级别 |
 |---|---|---|---|
-| 1 | G0 三必填缺失 | `why_customer_test` / `why_we_test` / `customer_tech_owner` 任一为空（**三条分别报出**，指明缺哪个字段） | high |
-| 2 | G1 聚焦超限 | 指标 > 3、场景 > 5 或风险 > 3 | medium |
-| 3 | 前置未就绪已投人力 | `G2.prerequisites_ready: false` 且 `G2.engineers_invested: true` | high |
-| 4 | 有结果无证据 | `result.achievement` 非空但 `result.evidence` 为空 | high |
-| 5 | 有证据无认可 | `result.evidence` 非空但 `result.recognition` 为空 | high |
-| 6 | 动作超期 | 有 `next_action_goal`，但最新 timeline 记录超过 `staleDays` 天（无 timeline 视为超期） | medium |
-| 7 | **G4 达成但无下一步** | `result.achievement` 非空但 `result.next_milestone` 为空（排序最优先，priority 95） | high |
-| 8 | 已关闭但四维未闭环 | `stage: closed` 但四维任一为空 | high |
+| R1 | G0 五必填缺失 | `gate0.missing` 非空 | 🔴 high |
+| R2 | 大金额未过 G0 | `amount_wan >= 300` 且结论非「通过」 | 🔴 high |
+| R3 | G0 通过但计划空白 | 结论「通过」且 `plan.criteria` 空 | 🔴 high |
+| R4 | 成功标准不聚焦 | criteria 数量不在 2–3（空则不算） | 🟡 medium |
+| R5 | 场景不聚焦 | scenarios 不在 3–5（空则不算） | 🟡 medium |
+| R6 | 风险超限 | `plan.risks` > 3 | 🟡 medium |
+| R7 | G2 前置未就绪已开测 | 有 progress 且 `plan.gate2.ready != Ready` | 🔴 high |
+| R8 | 进展无证据 | 最新进展有 `actual` 但 `evidence` 空 | 🔴 high |
+| R9 | 有证据无客户认可 | 有 evidence 但 recognition 是「未认可/待确认」 | 🔴 high |
+| R10 | G3-1 可证明但 G3-2 未确认 | `gate3_1=可证明` 且 `gate3_2!=已确认` | 🔴 high |
+| R11 | 达成但无 Next Milestone | `achievement=达成` 且 `business.milestone` 空 | 🔴 high（排序最优先） |
+| R12 | 阶段停滞 | `stage_since` 距今 > `stallDays`（默认 45 天） | 🟡 medium |
 
-规则 5 是链式的：它要求证据存在之后才算「缺认可」；若连证据都没有，规则 4 才是该报的那条。
+**R8–R10 只看最新一条进展**：只看最后一条，因为「历史某轮没证据」不该在补上之后继续报警。
 
-## 数据与权限
+**R4–R6 对空列表不触发**：空代表「还没规划」，那是 R3 的事；否则每个新项目第一天就会报三条聚焦问题。
+
+**R11 排最优先**：价值做出来了却没转化路径，是这套台账里最贵的缺口。
+
+## 数据与权限## 数据与权限
 
 | 项目 | 说明 |
 |---|---|
@@ -116,7 +171,7 @@ POC 台账最容易烂在「感觉做成了」上：项目说结果达成，但�
     defaultBranch: main
     cloneTimeoutMs: 120000
     fetchTimeoutMs: 60000
-    staleDays: 30
+    stallDays: 45
 ```
 
 | 键 | 默认 | 含义 |
@@ -126,7 +181,7 @@ POC 台账最容易烂在「感觉做成了」上：项目说结果达成，但�
 | `defaultBranch` | `main` | 克隆跟踪的分支 |
 | `cloneTimeoutMs` | `120000` | 单次 clone 上限 |
 | `fetchTimeoutMs` | `60000` | 单次 fetch + reset 上限 |
-| `staleDays` | `30` | 规则 6 的「多久没动算超期」阈值 |
+| `stallDays` | `45` | 规则 R12 的「阶段停留多久算停滞」阈值 |
 | `remoteUrl` | `''`（即 `https://github.com/<repository>.git`） | 克隆地址覆盖：GitHub Enterprise、镜像，或本地测试仓库 |
 
 > **关于超时默认值**：规格书建议 `cloneTimeoutMs: 30000`。实测同一网络下正常 clone 约 1.5 秒，但网络拥塞时一次 clone 用了 **68 秒**——30 秒会让首次使用间歇性失败。因此默认值提到 120 秒；超时仍会给出明确原因和【重试】。
@@ -162,7 +217,7 @@ npm pack                          # 产出 skillre-dsh-plugin-work-dashboard-0.1
 **仅使用自己拥有的、可丢弃的非 Desktop profile**做真实挂载验证：
 
 ```sh
-node scripts/verify-isolated.mjs   # 真实 clone/fetch/详情/鉴权/重启清空 + 导出/风险/时间线，结束自清理
+node scripts/verify-isolated.mjs   # 真实 clone/fetch/详情/鉴权/重启清空 + 风险/时间线，结束自清理
 node scripts/ui-preview.mjs        # 起一个有界 Web 实例并写入 .preview-url.txt
 node scripts/ui-verify.mjs         # 浏览器断言 + docs/evidence/ 截图
 node scripts/verify-market-install.mjs  # 线上索引 → 真实安装 → 动作可用（需已发布）
@@ -186,10 +241,10 @@ node scripts/verify-market-install.mjs  # 线上索引 → 真实安装 → 动�
 
 - **每次 DSH 重启缓存清空**，需要重新点【刷新】（clone 约 1.5 秒，慢网络更久）。这是既定行为。
 - **只读**：不提供导入、编辑、提交 PR。缺口只能看，不能在看板上改。
-- **规则 6 的日期来源**：schema 里 `next_action_goal` 是自由文本、没有日期字段，所以「多久没动」只能取最新一条 `timeline` 的日期；完全没有 timeline 的项目一律视为超期。
+- **R12 的日期来源**：v3 用 `stage_since` 算阶段停留时间；没有 `stage_since` 的项目不报 R12，而不是假定它停滞。
 - **定时刷新只在页面打开时生效**，关掉页面就停——预期行为。
-- **批量表单一次下载多个文件**：浏览器可能会询问是否允许多文件下载；YAML 文件只能装一个项目，所以每个项目一个文件。
-- **表单导出的是整文件替换**：组员回传的 YAML 覆盖 `projects/<poc_id>.yaml`，不做字段级合并。
+
+
 - 私有仓库要求本机 `gh` 已登录且账号有读权限；未登录时刷新会明确报「gh 未登录」。
 - **只有一个模块**：模块切换条目前只坐着一个模块，后续模块会加在同一个 Host 行里。
 

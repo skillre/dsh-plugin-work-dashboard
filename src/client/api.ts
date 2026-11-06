@@ -10,7 +10,7 @@
 
 import type { ClientConnectionLike, RpcResult } from './contracts.js'
 import { ENDPOINT } from '../types.js'
-import type { ExportOutcome, GlobalTimeline, PocRequest, ProjectDetail, RefreshOutcome, RiskBoard, Snapshot } from '../types.js'
+import type { GlobalTimeline, PocRequest, ProjectDetail, RefreshOutcome, RiskBoard, Snapshot } from '../types.js'
 
 /** Failure raised by the Host; `code` is stable enough to switch on. */
 export class ActionError extends Error {
@@ -32,8 +32,6 @@ export interface ClientApi {
   refresh(signal?: AbortSignal): Promise<{ snapshot: Snapshot; outcome: RefreshOutcome }>
   /** One project's detail page. */
   detail(pocId: string, signal?: AbortSignal): Promise<ProjectDetail>
-  /** Generate the self-contained HTML form. */
-  exportForm(input: { pocIds: string[]; mode: 'fill' | 'blank' }, signal?: AbortSignal): Promise<ExportOutcome>
   /** Risks across all projects, sorted by severity. */
   risks(signal?: AbortSignal): Promise<RiskBoard>
   /** Rounds across all projects, newest first. */
@@ -59,7 +57,6 @@ export function createApi(connection: ClientConnectionLike, lifetime: AbortSigna
     list: (signal) => call<Snapshot>({ action: 'list' }, signal),
     refresh: (signal) => call<{ snapshot: Snapshot; outcome: RefreshOutcome }>({ action: 'refresh' }, signal),
     detail: (pocId, signal) => call<ProjectDetail>({ action: 'detail', pocId }, signal),
-    exportForm: (input, signal) => call<ExportOutcome>({ action: 'export', ...input }, signal),
     risks: (signal) => call<RiskBoard>({ action: 'risks' }, signal),
     timeline: (signal) => call<GlobalTimeline>({ action: 'timeline' }, signal),
   }

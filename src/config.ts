@@ -36,8 +36,8 @@ export interface WorkDashboardConfig {
   cloneTimeoutMs: number
   /** Hard ceiling for one `git fetch` + `reset --hard`, in milliseconds. */
   fetchTimeoutMs: number
-  /** Days without a timeline round after which a next action counts as stale. */
-  staleDays: number
+  /** Days in one stage after which rule 12 reports the project as stalled. */
+  stallDays: number
 }
 
 /** Default cache root, under the DSH home so a system cleaner never eats it. */
@@ -51,7 +51,7 @@ export const Config: Schema<WorkDashboardConfig> = Schema.object({
   defaultBranch: Schema.string().default('main'),
   cloneTimeoutMs: Schema.number().min(5_000).max(600_000).step(1).default(120_000),
   fetchTimeoutMs: Schema.number().min(5_000).max(600_000).step(1).default(60_000),
-  staleDays: Schema.number().min(1).max(365).step(1).default(30),
+  stallDays: Schema.number().min(1).max(365).step(1).default(45),
 })
 
 /** `owner/name` on GitHub; the only repository shape the clone command accepts. */

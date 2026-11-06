@@ -34,8 +34,8 @@ export interface WorkDashboardConfig {
     cloneTimeoutMs: number;
     /** Hard ceiling for one `git fetch` + `reset --hard`, in milliseconds. */
     fetchTimeoutMs: number;
-    /** Days without a timeline round after which a next action counts as stale. */
-    staleDays: number;
+    /** Days in one stage after which rule 12 reports the project as stalled. */
+    stallDays: number;
 }
 /** Default cache root, under the DSH home so a system cleaner never eats it. */
 export declare const DEFAULT_CACHE_ROOT = "~/.dsh/cache/work-dashboard";

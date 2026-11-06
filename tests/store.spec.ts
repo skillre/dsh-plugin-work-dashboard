@@ -16,89 +16,191 @@ import type { Snapshot } from '../src/types.js'
 
 const NOW = new Date('2026-11-05T00:00:00Z')
 
-/** The three fixtures the specification asks for, plus one broken file. */
+/**
+ * v3 fixtures.
+ *
+ * The model is progress-centred, so the fixtures differ from each other in what
+ * matters: one has real progress entries (the happy path), one has nothing but
+ * G0 gaps (the common case in the live ledger), and one is achieved with no next
+ * milestone (rule 11).
+ */
 const COMPLETE = `poc_id: POC-2026-001
 name: 某某银行零信任试点
-type: customer-pilot
-tier: strategic
-stage: G2-方案验证
+org: { system: 人保体系, company: 人保财险, department: 信息技术部 }
+amount_wan: 1500
+poc_type: 大体量项目
+priority: strategic
 owner: 张三
-sales_initiator: 李四
-customer_tech_owner: 王工
-why_customer_test: 客户要做等保合规改造
-why_we_test: 客户是区域标杆
-next_action_goal: 两周内完成 200 人灰度接入
-gates:
-  G0: { complete: true, date: 2026-10-15 }
-  G1: { complete: true, date: 2026-10-28, indicators_count: 3, scenarios_count: 4, risks_count: 2 }
-  G2: { complete: false, prerequisites_ready: true, engineers_invested: true }
-success_criteria:
-  - { name: 200 人并发, version: v1, metric: 成功率 ≥ 99.5% }
-success_scenarios: [办公网远程接入, 出差移动接入, 第三方运维临时接入]
-risks:
-  - { name: AD 环境老旧, level: high, mitigation: 提前预演 }
-result:
-  achievement: null
-  evidence: null
-  recognition: null
-  next_milestone: null
-timeline:
-  - { date: 2026-10-15, round: 1, goal: 完成立项, actual: 已完成, evidence: 立项邮件, customer_feedback: 认可方向, recognition_scope: 口头 }
-  - { date: 2026-10-28, round: 2, goal: 完成方案设计, actual: 完成, evidence: 方案文档 v1.2, customer_feedback: 待评审, recognition_scope: 无 }
+sales: 李四
+tech_owner: 王工
+exec_sponsor: 陈总
+stage: G2-方案验证
+status: 进行中
+stage_since: 2026-10-01
+gate0:
+  why_customer: 客户要做等保合规改造
+  why_us: 客户是区域标杆
+  decision_chain: 技术部提需求，采购部审批
+  post_poc_decision: 立项采购
+  competitor: 厂商A
+  review: { conclusion: 通过, reviewer: 杨闯, reviewed_at: 2026-09-28 }
+  missing: []
+  complete: true
+plan:
+  customer_pain: 现有 VPN 接入体验差
+  expected_recognition: 客户 IT 部门书面认可
+  criteria:
+    - { name: 200人并发, metric: 成功率, baseline: null, target: ">=99.5%" }
+    - { name: 单点登录, metric: 对接验收, baseline: null, target: 通过 }
+  scenarios: [办公网远程接入, 出差移动接入, 第三方运维接入]
+  our_edge: 零信任架构
+  timeline: { start: 2026-10-01, end: 2026-12-31 }
+  risks:
+    - { name: AD 环境老旧, level: high, mitigation: 提前预演 }
+  report_nodes: [阶段一汇报]
+  gate1: { conclusion: 通过, reviewed_at: 2026-10-20 }
+  gate2: { ready: Ready, checked_at: 2026-10-25, prerequisites: [] }
+progress:
+  - seq: 1
+    date: 2026-10-15
+    type: 内部Review
+    goal: 验证200人并发接入
+    items: [办公网远程接入]
+    actual: 完成150人灰度
+    completion: "75%"
+    evidence:
+      - { title: 压测报告, link: https://example.com/a, type: 文档 }
+    customer: { synced_with: 王工, feedback: 性能比预期好, recognition: 部分认可 }
+    gate3_1: 可证明
+    gate3_2: 待确认
+    next: { goal: 补齐200人, owner: 张三, deadline: 2026-11-20 }
+outcome:
+  achievement: 部分达成
+  customer_recognition: 部分认可
+  our_proof: 压测报告
+  remaining_risks: 无
+  conclusion: { proved: 性能达标, recognized: 方向认可, next_business: 推进立项 }
+  business: { milestone: 完成立项, owner: 张三, deadline: 2026-12-01, status: 待推进 }
+  overall: 进展良好
+  reviewed_at: 2026-11-01
 `
 
 const MISSING_G0 = `poc_id: POC-2026-002
 name: 某某集团办公网改造
-type: tech-validation
-tier: normal
-stage: G0-立项
+org: { system: 国寿体系, company: 国寿财险, department: null }
+amount_wan: 300
+poc_type: SDL
+priority: null
 owner: 赵六
-sales_initiator: 钱七
-customer_tech_owner: null
-why_customer_test: null
-why_we_test: null
-next_action_goal: null
-gates:
-  G0: { complete: false }
-  G1: { complete: false, indicators_count: 0, scenarios_count: 0, risks_count: 0 }
-  G2: { complete: false, prerequisites_ready: false, engineers_invested: false }
-success_criteria: []
-success_scenarios: []
-risks: []
-result: { achievement: null, evidence: null, recognition: null, next_milestone: null }
-timeline: []
+sales: 钱七
+tech_owner: null
+exec_sponsor: null
+stage: G0-立项
+status: 进行中
+stage_since: null
+gate0:
+  why_customer: null
+  why_us: null
+  decision_chain: null
+  post_poc_decision: null
+  competitor: null
+  review: { conclusion: null, reviewer: null, reviewed_at: null }
+  missing: [why_customer, why_us, decision_chain, post_poc_decision, tech_owner]
+  complete: false
+plan:
+  customer_pain: null
+  expected_recognition: null
+  criteria: []
+  scenarios: []
+  our_edge: null
+  timeline: { start: null, end: null }
+  risks: []
+  report_nodes: []
+  gate1: { conclusion: null, reviewed_at: null }
+  gate2: { ready: null, checked_at: null, prerequisites: [] }
+progress: []
+outcome:
+  achievement: null
+  customer_recognition: null
+  our_proof: null
+  remaining_risks: null
+  conclusion: { proved: null, recognized: null, next_business: null }
+  business: { milestone: null, owner: null, deadline: null, status: null }
+  overall: null
+  reviewed_at: null
 `
 
 const G4_NO_NEXT = `poc_id: POC-2026-003
 name: 某某制造产线安全接入
-type: customer-pilot
-tier: high-value
-stage: G4-结果转化
+org: { system: 人保体系, company: 人保寿险, department: 生产部 }
+amount_wan: 800
+poc_type: AI安全
+priority: high
 owner: 孙八
-sales_initiator: 周九
-customer_tech_owner: 吴工
-why_customer_test: 产线设备远程运维存在安全风险
-why_we_test: 制造业是重点行业
-next_action_goal: 完成验收并推动复购
-gates:
-  G0: { complete: true, date: 2026-09-01 }
-  G1: { complete: true, date: 2026-09-20, indicators_count: 2, scenarios_count: 3, risks_count: 1 }
-  G2: { complete: true, date: 2026-10-10, prerequisites_ready: true, engineers_invested: true }
-success_criteria:
-  - { name: 50 台设备接入 }
-  - { name: 运维全程审计 }
-success_scenarios: [产线设备远程运维, 供应商临时接入, 车间网络隔离]
-risks:
-  - { name: 产线不能停机, level: medium, mitigation: 分批次夜间实施 }
-result:
-  achievement: 全部完成，客户验收通过
-  evidence: 验收报告.pdf
-  recognition: 客户 IT 部门书面认可
-  next_milestone: null
-timeline:
-  - { date: 2026-09-01, round: 1, goal: 完成立项 }
-  - { date: 2026-10-10, round: 2, goal: 完成方案验证 }
-  - { date: 2026-11-01, round: 3, goal: 完成验收, recognition_scope: 正式验收 }
+sales: 周九
+tech_owner: 吴工
+exec_sponsor: null
+stage: G4-结果转化
+status: 进行中
+stage_since: 2026-10-10
+gate0:
+  why_customer: 产线设备远程运维存在安全风险
+  why_us: 制造业是重点行业
+  decision_chain: 生产部提需求
+  post_poc_decision: 采购
+  competitor: null
+  review: { conclusion: 通过, reviewer: 杨闯, reviewed_at: 2026-09-01 }
+  missing: []
+  complete: true
+plan:
+  customer_pain: 设备远程运维风险
+  expected_recognition: 客户验收
+  criteria:
+    - { name: 50台设备接入, metric: 接入数, baseline: null, target: 50 }
+    - { name: 运维审计, metric: 覆盖, baseline: null, target: 100% }
+  scenarios: [产线远程运维, 供应商临时接入, 车间网络隔离]
+  our_edge: 审计能力
+  timeline: { start: 2026-09-01, end: 2026-11-30 }
+  risks:
+    - { name: 产线不能停机, level: medium, mitigation: 夜间实施 }
+  report_nodes: []
+  gate1: { conclusion: 通过, reviewed_at: 2026-09-20 }
+  gate2: { ready: Ready, checked_at: 2026-10-05, prerequisites: [] }
+progress:
+  - seq: 1
+    date: 2026-09-01
+    type: 内部Review
+    goal: 完成立项
+    items: []
+    actual: 立项通过
+    completion: "25%"
+    evidence: []
+    customer: { synced_with: '', feedback: '', recognition: '' }
+    gate3_1: ''
+    gate3_2: ''
+    next: { goal: '', owner: '', deadline: '' }
+  - seq: 2
+    date: 2026-11-01
+    type: 客户阶段同步
+    goal: 完成验收
+    items: [产线远程运维]
+    actual: 客户验收通过
+    completion: "100%"
+    evidence:
+      - { title: 验收报告.pdf, link: https://example.com/b, type: 文档 }
+    customer: { synced_with: 吴工, feedback: 满意, recognition: 认可 }
+    gate3_1: 可证明
+    gate3_2: 已确认
+    next: { goal: '', owner: '', deadline: '' }
+outcome:
+  achievement: 达成
+  customer_recognition: 认可
+  our_proof: 验收报告.pdf
+  remaining_risks: null
+  conclusion: { proved: 审计能力, recognized: 客户验收, next_business: 复购 }
+  business: { milestone: null, owner: null, deadline: null, status: null }
+  overall: 成功
+  reviewed_at: 2026-11-01
 `
 
 let root = ''
@@ -146,7 +248,7 @@ afterAll(async () => {
 
 describe('snapshot', () => {
   it('reports the three projects with their summaries', async () => {
-    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, staleDays: 30 })
+    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
     const snapshot: Snapshot = await store.snapshot()
     expect(snapshot.cacheReady).toBe(true)
     expect(snapshot.projects).toHaveLength(3)
@@ -154,12 +256,16 @@ describe('snapshot', () => {
     expect(snapshot.fetchedAt).toBe('2026-11-05T04:00:00.000Z')
     const byId = new Map(snapshot.projects.map((project) => [project.pocId, project]))
     expect(byId.get('POC-2026-001')).toMatchObject({ name: '某某银行零信任试点', stage: 'G2', closed: false })
+    expect(byId.get('POC-2026-001')?.amountWan).toBe(1500)
+    expect(byId.get('POC-2026-001')?.system).toBe('人保体系')
     expect(byId.get('POC-2026-003')?.dimensionCount).toBe(3)
     expect(byId.get('POC-2026-002')?.dimensionCount).toBe(0)
+    expect(byId.get('POC-2026-001')?.progressCount).toBe(1)
+    expect(byId.get('POC-2026-002')?.progressCount).toBe(0)
   })
 
   it('counts the four dimensions separately per project', async () => {
-    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, staleDays: 30 })
+    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
     const snapshot = await store.snapshot()
     const project = snapshot.projects.find((candidate) => candidate.pocId === 'POC-2026-003')!
     expect(project.dimensions).toEqual({ achievement: true, evidence: true, recognition: true, nextMilestone: false })
@@ -168,50 +274,52 @@ describe('snapshot', () => {
   })
 
   it('computes the four headline counters', async () => {
-    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, staleDays: 30 })
+    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
     const snapshot = await store.snapshot()
     expect(snapshot.stats).toMatchObject({
       total: 3,
-      active: 3,
-      // POC-002 is missing all three G0 prerequisites.
-      g0Incomplete: 1,
-      // POC-003 carries the G4 no-next-milestone high gap; POC-002 the G0 ones.
-      atRisk: 2,
-      // POC-003 has achievement + evidence + recognition.
-      convertible: 1,
-      closed: 0,
+      // POC-001 and POC-003 passed G0; POC-002 has no conclusion.
+      g0Passed: 2,
+      inProgress: 3,
+      // 1500 + 300 + 800
+      amountTotalWan: 2600,
+      g0Complete: 2,
+      // POC-003 is 达成 + 认可.
+      succeeded: 1,
+      stopped: 0,
     })
   })
 
   it('orders the pending list by priority and includes every rule', async () => {
-    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, staleDays: 30 })
+    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
     const snapshot = await store.snapshot()
     expect(snapshot.gaps.length).toBeGreaterThan(0)
-    expect(snapshot.gaps[0]?.rule).toBe('G4-no-next-milestone')
+    expect(snapshot.gaps[0]?.rule).toBe('R11-no-next-milestone')
     const rules = new Set(snapshot.gaps.map((gap) => gap.rule))
-    expect(rules.has('G0-why-customer')).toBe(true)
-    expect(rules.has('G4-no-next-milestone')).toBe(true)
+    expect(rules.has('R1-gate0-missing')).toBe(true)
+    expect(rules.has('R11-no-next-milestone')).toBe(true)
     expect(snapshot.gaps.every((gap) => gap.pocName !== '' && gap.pocId !== '')).toBe(true)
   })
 
   it('reports gate completion from the ledger records, not the stage position', async () => {
-    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, staleDays: 30 })
+    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
     const snapshot = await store.snapshot()
     const g4 = snapshot.projects.find((project) => project.pocId === 'POC-2026-003')!
-    // POC-2026-003 sits at G4 with G0..G2 recorded complete and no G3/G4 date.
-    expect(g4.gateComplete).toEqual([true, true, true, false, false])
+    // POC-2026-003 sits at G4: G0 complete, G1 passed, G2 Ready, newest progress
+    // has gate3_2 已确认, and the outcome is 达成.
+    expect(g4.stageDone).toEqual([true, true, true, true, true])
     const g0 = snapshot.projects.find((project) => project.pocId === 'POC-2026-002')!
-    expect(g0.gateComplete).toEqual([false, false, false, false, false])
+    expect(g0.stageDone).toEqual([false, false, false, false, false])
   })
 
   it('sorts projects so the ones needing attention come first', async () => {
-    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, staleDays: 30 })
+    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
     const snapshot = await store.snapshot()
     expect(snapshot.projects[0]?.highGapCount).toBeGreaterThanOrEqual(snapshot.projects[1]?.highGapCount ?? 0)
   })
 
   it('reports an empty, not-ready cache without throwing', async () => {
-    const store = new PocStore(cacheOf(repoPath, false) as unknown as RepoCache, { now: () => NOW, staleDays: 30 })
+    const store = new PocStore(cacheOf(repoPath, false) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
     const snapshot = await store.snapshot()
     expect(snapshot).toMatchObject({ cacheReady: false, projects: [], gaps: [], warnings: [] })
     expect(snapshot.stats.total).toBe(0)
@@ -221,35 +329,40 @@ describe('snapshot', () => {
 
 describe('detail', () => {
   it('returns the full record for one project', async () => {
-    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, staleDays: 30 })
+    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
     const detail = await store.detail('POC-2026-003')
     expect(detail).not.toBeNull()
     expect(detail!.summary.name).toBe('某某制造产线安全接入')
-    expect(detail!.gates.map((gate) => gate.stage)).toEqual(['G0', 'G1', 'G2', 'G3', 'G4'])
-    expect(detail!.gates[0]).toMatchObject({ stage: 'G0', complete: true, date: '2026-09-01' })
-    expect(detail!.gates[3]).toMatchObject({ stage: 'G3', complete: false, date: null })
-    expect(detail!.criteria).toHaveLength(2)
-    expect(detail!.scenarios).toHaveLength(3)
-    expect(detail!.risks).toHaveLength(1)
-    expect(detail!.timeline).toHaveLength(3)
-    expect(detail!.timeline[2]).toMatchObject({ date: '2026-11-01', round: 3, recognition_scope: '正式验收' })
-    expect(detail!.result.next_milestone).toBe('')
-    expect(detail!.gaps.map((gap) => gap.rule)).toContain('G4-no-next-milestone')
+    expect(detail!.gate0).toMatchObject({ conclusion: '通过', reviewer: '杨闯', complete: true })
+    expect(detail!.gate0.missing).toEqual([])
+    expect(detail!.plan.criteria).toHaveLength(2)
+    expect(detail!.plan.scenarios).toHaveLength(3)
+    expect(detail!.plan.risks).toHaveLength(1)
+    expect(detail!.plan.gate2Ready).toBe('Ready')
+    // The v3 core: the progress stream is the history.
+    expect(detail!.progress).toHaveLength(2)
+    expect(detail!.progress[1]).toMatchObject({ date: '2026-11-01', type: '客户阶段同步', gate3_2: '已确认' })
+    expect(detail!.progress[1]?.evidence[0]).toMatchObject({ title: '验收报告.pdf', type: '文档' })
+    expect(detail!.progress[1]?.customer.recognition).toBe('认可')
+    expect(detail!.outcome.achievement).toBe('达成')
+    expect(detail!.outcome.milestone).toBe('')
+    expect(detail!.gaps.map((gap) => gap.rule)).toContain('R11-no-next-milestone')
   })
 
   it('returns null for an unknown id and for a cold cache', async () => {
-    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, staleDays: 30 })
+    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
     expect(await store.detail('POC-9999')).toBeNull()
-    const cold = new PocStore(cacheOf(repoPath, false) as unknown as RepoCache, { now: () => NOW, staleDays: 30 })
+    const cold = new PocStore(cacheOf(repoPath, false) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
     expect(await cold.detail('POC-2026-001')).toBeNull()
   })
 
   it('renders the G0 prerequisites of a broken project as empty strings', async () => {
-    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, staleDays: 30 })
+    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
     const detail = await store.detail('POC-2026-002')
-    expect(detail!.whyCustomerTest).toBe('')
-    expect(detail!.whyWeTest).toBe('')
-    expect(detail!.customerTechOwner).toBe('')
+    expect(detail!.gate0.whyCustomer).toBe('')
+    expect(detail!.gate0.whyUs).toBe('')
+    expect(detail!.summary.techOwner).toBe('')
+    expect(detail!.gate0.missing).toHaveLength(5)
   })
 })
 
@@ -257,7 +370,7 @@ describe('warnings', () => {
   it('skips an unparsable file and keeps the rest', async () => {
     const dir = await seed({ 'POC-2026-001.yaml': COMPLETE, 'broken.yaml': 'poc_id: [unclosed\n' })
     try {
-      const store = new PocStore(cacheOf(dir) as unknown as RepoCache, { now: () => NOW, staleDays: 30 })
+      const store = new PocStore(cacheOf(dir) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
       const snapshot = await store.snapshot()
       expect(snapshot.projects).toHaveLength(1)
       expect(snapshot.warnings).toHaveLength(1)
@@ -270,7 +383,7 @@ describe('warnings', () => {
   it('falls back to the file name when poc_id is missing', async () => {
     const dir = await seed({ 'POC-2026-010.yaml': 'name: 无编号项目\nstage: G0-立项\n' })
     try {
-      const store = new PocStore(cacheOf(dir) as unknown as RepoCache, { now: () => NOW, staleDays: 30 })
+      const store = new PocStore(cacheOf(dir) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
       const snapshot = await store.snapshot()
       expect(snapshot.projects[0]?.pocId).toBe('POC-2026-010')
       expect(snapshot.warnings.some((warning) => warning.includes('poc_id is missing'))).toBe(true)
@@ -282,7 +395,7 @@ describe('warnings', () => {
   it('warns about an empty file and a non-mapping document', async () => {
     const dir = await seed({ 'empty.yaml': '', 'list.yaml': '- a\n- b\n' })
     try {
-      const store = new PocStore(cacheOf(dir) as unknown as RepoCache, { now: () => NOW, staleDays: 30 })
+      const store = new PocStore(cacheOf(dir) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
       const snapshot = await store.snapshot()
       expect(snapshot.projects).toHaveLength(0)
       expect(snapshot.warnings).toHaveLength(2)
@@ -294,7 +407,7 @@ describe('warnings', () => {
   it('warns about a duplicate poc_id but still shows both rows', async () => {
     const dir = await seed({ 'a.yaml': 'poc_id: POC-2026-001\nname: A\n', 'b.yaml': 'poc_id: POC-2026-001\nname: B\n' })
     try {
-      const store = new PocStore(cacheOf(dir) as unknown as RepoCache, { now: () => NOW, staleDays: 30 })
+      const store = new PocStore(cacheOf(dir) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
       const snapshot = await store.snapshot()
       expect(snapshot.projects).toHaveLength(2)
       expect(snapshot.warnings.some((warning) => warning.includes('already defined'))).toBe(true)

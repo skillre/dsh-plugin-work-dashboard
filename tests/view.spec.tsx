@@ -5,7 +5,7 @@ import { WorkDashboardPage } from '../src/client/view.jsx'
 import type { ClientApi } from '../src/client/api.js'
 import type { ClientLocaleLike } from '../src/client/contracts.js'
 import { dictFor, format } from '../src/client/text.js'
-import type { PocRecord, ProjectDetail, ProjectSummary, Snapshot } from '../src/types.js'
+import type { PocRecord, ProgressView, ProjectDetail, ProjectSummary, Snapshot } from '../src/types.js'
 
 /**
  * Console page tests.
@@ -38,43 +38,66 @@ function makeLocale(active = 'zh'): ClientLocaleLike {
   }
 }
 
-/** One project summary as the Host sends it. */
+/** One v3 project summary as the Host sends it. */
 function summary(overrides: Partial<ProjectSummary> = {}): ProjectSummary {
   return {
     pocId: 'POC-2026-001',
     name: '某某银行零信任试点',
-    type: 'customer-pilot',
-    tier: 'strategic',
+    system: '人保体系',
+    company: '人保财险',
+    department: '信息技术部',
+    pocType: '大体量项目',
+    amountWan: 1500,
+    priority: 'strategic',
     stageLabel: 'G2-方案验证',
     stage: 'G2',
     closed: false,
-    gateComplete: [true, true, false, false, false],
+    status: '进行中',
+    stageSince: '2026-10-01',
+    daysInStage: 36,
     owner: '张三',
+    techOwner: '王工',
+    g0Conclusion: '通过',
+    g0Passed: true,
+    g0Complete: true,
+    g0MissingCount: 0,
+    stageDone: [true, true, true, false, false],
     dimensions: { achievement: true, evidence: true, recognition: false, nextMilestone: false },
     dimensionCount: 2,
     gapCount: 2,
     highGapCount: 2,
-    lastActivity: '2026-10-28',
-    daysSinceActivity: 8,
+    progressCount: 1,
+    lastProgressDate: '2026-10-15',
+    lastProgressSummary: '内部Review · 完成150人灰度 · 75%',
+    daysSinceProgress: 22,
+    outcomeAchievement: '部分达成',
+    outcomeRecognition: '部分认可',
     ...overrides,
   }
 }
 
-/** A snapshot with three projects and a couple of gaps. */
+/** A v3 snapshot with three projects and a couple of gaps. */
 function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   const projects: ProjectSummary[] = [
     summary(),
     summary({
-      pocId: 'POC-2026-002', name: '某某集团办公网改造', stageLabel: 'G0-立项', stage: 'G0',
-      gateComplete: [false, false, false, false, false],
+      pocId: 'POC-2026-002', name: '某某集团办公网改造', system: '国寿体系', company: '国寿财险',
+      stageLabel: 'G0-立项', stage: 'G0', amountWan: 300, pocType: 'SDL',
+      stageDone: [false, false, false, false, false],
+      g0Conclusion: '', g0Passed: false, g0Complete: false, g0MissingCount: 5,
       dimensions: { achievement: false, evidence: false, recognition: false, nextMilestone: false },
       dimensionCount: 0, gapCount: 3, highGapCount: 3,
+      progressCount: 0, lastProgressDate: null, lastProgressSummary: '', daysSinceProgress: null,
+      outcomeAchievement: '', outcomeRecognition: '',
     }),
     summary({
-      pocId: 'POC-2026-003', name: '某某制造产线安全接入', stageLabel: 'G4-结果转化', stage: 'G4',
-      gateComplete: [true, true, true, true, false],
+      pocId: 'POC-2026-003', name: '某某制造产线安全接入', system: '人保体系', company: '人保寿险',
+      stageLabel: 'G4-结果转化', stage: 'G4', amountWan: 800, pocType: 'AI安全',
+      stageDone: [true, true, true, true, true],
       dimensions: { achievement: true, evidence: true, recognition: true, nextMilestone: false },
       dimensionCount: 3, gapCount: 1, highGapCount: 1,
+      progressCount: 2, lastProgressDate: '2026-11-01', lastProgressSummary: '客户阶段同步 · 客户验收通过 · 100%',
+      outcomeAchievement: '达成', outcomeRecognition: '认可',
     }),
   ]
   return {
@@ -83,15 +106,16 @@ function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     fetchedAt: '2026-11-05T04:00:00.000Z',
     cachePath: '/Users/u/.dsh/cache/work-dashboard/repo',
     projects,
-    stats: { active: 3, g0Incomplete: 1, atRisk: 2, convertible: 1, total: 3, closed: 0 },
+    stats: { total: 3, g0Passed: 2, inProgress: 3, amountTotalWan: 2600, g0Complete: 2, awaitingCustomer: 0, succeeded: 1, stopped: 0 },
     gaps: [
       {
-        rule: 'G4-no-next-milestone', ruleNo: 7, level: 'high', priority: 95,
-        pocId: 'POC-2026-003', pocName: '某某制造产线安全接入', field: 'result.next_milestone',
+        rule: 'R11-no-next-milestone', ruleNo: 11, level: 'high', priority: 96,
+        pocId: 'POC-2026-003', pocName: '某某制造产线安全接入', field: 'outcome.business.milestone',
       },
       {
-        rule: 'G0-why-customer', ruleNo: 1, level: 'high', priority: 90,
-        pocId: 'POC-2026-002', pocName: '某某集团办公网改造', field: 'why_customer_test',
+        rule: 'R1-gate0-missing', ruleNo: 1, level: 'high', priority: 90,
+        pocId: 'POC-2026-002', pocName: '某某集团办公网改造', field: 'gate0.missing',
+        params: { count: 5, missing: 'why_customer,why_us,decision_chain,post_poc_decision,tech_owner' },
       },
     ],
     warnings: [],
@@ -99,38 +123,83 @@ function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   }
 }
 
-/** The detail record for POC-2026-003. */
+/** One progress entry as the Host sends it. */
+function progressEntry(overrides: Partial<ProgressView> = {}): ProgressView {
+  return {
+    seq: 2,
+    date: '2026-11-01',
+    type: '客户阶段同步',
+    goal: '完成验收',
+    items: ['产线远程运维'],
+    actual: '客户验收通过',
+    completion: '100%',
+    evidence: [{ title: '验收报告.pdf', link: 'https://example.com/b', type: '文档' }],
+    customer: { syncedWith: '吴工', feedback: '满意', recognition: '认可' },
+    gate3_1: '可证明',
+    gate3_2: '已确认',
+    next: { goal: '', owner: '', deadline: '' },
+    ...overrides,
+  }
+}
+
+/** The v3 detail record for POC-2026-003. */
 function detail(): ProjectDetail {
   return {
     summary: summary({
-      pocId: 'POC-2026-003', name: '某某制造产线安全接入', stageLabel: 'G4-结果转化', stage: 'G4',
-      gateComplete: [true, true, true, false, false],
+      pocId: 'POC-2026-003', name: '某某制造产线安全接入', system: '人保体系', company: '人保寿险',
+      stageLabel: 'G4-结果转化', stage: 'G4', amountWan: 800, pocType: 'AI安全',
+      stageDone: [true, true, true, true, true],
       dimensions: { achievement: true, evidence: true, recognition: true, nextMilestone: false }, dimensionCount: 3,
+      progressCount: 2, lastProgressDate: '2026-11-01', outcomeAchievement: '达成', outcomeRecognition: '认可',
     }),
-    type: 'customer-pilot',
-    tier: 'high-value',
-    owner: '孙八',
-    salesInitiator: '周九',
-    customerTechOwner: '吴工',
-    whyCustomerTest: '产线设备远程运维存在安全风险',
-    whyWeTest: '制造业是重点行业',
-    nextActionGoal: '完成验收并推动复购',
-    gates: [
-      { stage: 'G0', complete: true, date: '2026-09-01', indicators: null, scenarios: null, risks: null, prerequisitesReady: null, engineersInvested: null },
-      { stage: 'G1', complete: true, date: '2026-09-20', indicators: 2, scenarios: 3, risks: 1, prerequisitesReady: null, engineersInvested: null },
-      { stage: 'G2', complete: true, date: '2026-10-10', indicators: null, scenarios: null, risks: null, prerequisitesReady: true, engineersInvested: true },
-      { stage: 'G3', complete: false, date: null, indicators: null, scenarios: null, risks: null, prerequisitesReady: null, engineersInvested: null },
-      { stage: 'G4', complete: false, date: null, indicators: null, scenarios: null, risks: null, prerequisitesReady: null, engineersInvested: null },
+    org: { system: '人保体系', company: '人保寿险', department: '生产部' },
+    sales: '周九',
+    execSponsor: '',
+    gate0: {
+      whyCustomer: '产线设备远程运维存在安全风险',
+      whyUs: '制造业是重点行业',
+      decisionChain: '生产部提需求',
+      postPocDecision: '采购',
+      competitor: '',
+      conclusion: '通过',
+      reviewer: '杨闯',
+      reviewedAt: '2026-09-01',
+      missing: [],
+      complete: true,
+    },
+    plan: {
+      customerPain: '设备远程运维风险',
+      expectedRecognition: '客户验收',
+      criteria: [{ name: '50 台设备接入', metric: '接入成功率', baseline: '', target: '100%' }],
+      scenarios: ['产线设备远程运维', '供应商临时接入'],
+      ourEdge: '审计能力',
+      timelineStart: '2026-09-01',
+      timelineEnd: '2026-11-30',
+      risks: [{ name: '产线不能停机', level: 'medium', mitigation: '分批次夜间实施' }],
+      reportNodes: [],
+      gate1Conclusion: '通过',
+      gate2Ready: 'Ready',
+    },
+    progress: [
+      progressEntry({ seq: 1, date: '2026-09-01', type: '内部Review', goal: '完成立项', actual: '立项通过', completion: '25%', evidence: [], customer: { syncedWith: '', feedback: '', recognition: '' }, gate3_1: '', gate3_2: '' }),
+      progressEntry(),
     ],
-    criteria: [{ name: '50 台设备接入', version: 'v1', metric: '接入成功率 100%' }],
-    scenarios: ['产线设备远程运维', '供应商临时接入'],
-    risks: [{ name: '产线不能停机', level: 'medium', mitigation: '分批次夜间实施' }],
-    result: { achievement: '全部完成', evidence: '验收报告.pdf', recognition: '书面认可', next_milestone: '' },
-    timeline: [
-      { date: '2026-09-01', round: 1, goal: '完成立项', actual: '已完成', evidence: '立项文档', customer_feedback: '认可', recognition_scope: '口头' },
-      { date: '2026-11-01', round: 3, goal: '完成验收', actual: '客户验收通过', evidence: '验收报告.pdf', customer_feedback: '高度认可', recognition_scope: '正式验收' },
-    ],
-    gaps: [{ rule: 'G4-no-next-milestone', ruleNo: 7, level: 'high', priority: 95, pocId: 'POC-2026-003', pocName: '某某制造产线安全接入', field: 'result.next_milestone' }],
+    outcome: {
+      achievement: '达成',
+      customerRecognition: '认可',
+      ourProof: '验收报告.pdf',
+      remainingRisks: '',
+      proved: '审计能力',
+      recognized: '客户验收',
+      nextBusiness: '复购',
+      milestone: '',
+      businessOwner: '',
+      businessDeadline: '',
+      businessStatus: '',
+      overall: '成功',
+      reviewedAt: '2026-11-01',
+    },
+    gaps: [{ rule: 'R11-no-next-milestone', ruleNo: 11, level: 'high', priority: 96, pocId: 'POC-2026-003', pocName: '某某制造产线安全接入', field: 'outcome.business.milestone' }],
   }
 }
 
@@ -164,9 +233,6 @@ function makeApi(options: {
         throw new ActionError('work-dashboard/unknown-project', `No project with poc_id ${pocId}.`, {})
       }
       return record
-    },
-    async exportForm(input: { pocIds: string[]; mode: 'fill' | 'blank' }) {
-      return { html: '<html></html>', fileName: 'poc-form.html', pocIds: input.pocIds, mode: input.mode, bytes: 13 }
     },
     async risks() {
       return {
@@ -207,7 +273,7 @@ async function renderPage(api: ClientApi, locale = makeLocale()) {
 
 describe('empty state', () => {
   it('shows "no data yet" with a refresh call to action on a cold cache', async () => {
-    const api = makeApi({ initial: snapshot({ cacheReady: false, projects: [], stats: { active: 0, g0Incomplete: 0, atRisk: 0, convertible: 0, total: 0, closed: 0 }, gaps: [] }) })
+    const api = makeApi({ initial: snapshot({ cacheReady: false, projects: [], stats: { total: 0, g0Passed: 0, inProgress: 0, amountTotalWan: 0, g0Complete: 0, awaitingCustomer: 0, succeeded: 0, stopped: 0 }, gaps: [] }) })
     await renderPage(api)
     expect(screen.getByText('还没有数据')).toBeTruthy()
     expect(screen.getByText('点【刷新】从 GitHub 拉取 POC 台账')).toBeTruthy()
@@ -217,14 +283,14 @@ describe('empty state', () => {
   })
 
   it('does not pull data on its own: the empty state makes no refresh call', async () => {
-    const api = makeApi({ initial: snapshot({ cacheReady: false, projects: [], gaps: [], stats: { active: 0, g0Incomplete: 0, atRisk: 0, convertible: 0, total: 0, closed: 0 } }) })
+    const api = makeApi({ initial: snapshot({ cacheReady: false, projects: [], gaps: [], stats: { total: 0, g0Passed: 0, inProgress: 0, amountTotalWan: 0, g0Complete: 0, awaitingCustomer: 0, succeeded: 0, stopped: 0 } }) })
     await renderPage(api)
     expect(api.refreshCalls).toBe(0)
   })
 
   it('pulls when the empty-state button is pressed, then shows the board', async () => {
     const api = makeApi({
-      initial: snapshot({ cacheReady: false, projects: [], gaps: [], stats: { active: 0, g0Incomplete: 0, atRisk: 0, convertible: 0, total: 0, closed: 0 } }),
+      initial: snapshot({ cacheReady: false, projects: [], gaps: [], stats: { total: 0, g0Passed: 0, inProgress: 0, amountTotalWan: 0, g0Complete: 0, awaitingCustomer: 0, succeeded: 0, stopped: 0 } }),
       refreshed: snapshot(),
     })
     await renderPage(api)
@@ -235,11 +301,14 @@ describe('empty state', () => {
 })
 
 describe('overview page', () => {
-  it('shows the four headline counters', async () => {
+  it('shows the four v3 headline counters', async () => {
     await renderPage(makeApi())
-    for (const label of ['进行中', '待补 G0', '有风险', '可转化']) {
+    // The spec's acceptance list: total, G0 passed, in progress, amount sum.
+    for (const label of ['POC 总数', 'G0 通过', '进行中', '金额合计']) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0)
     }
+    // 1500 + 300 + 800 = 2600 万元
+    expect(screen.getByText('2,600')).toBeTruthy()
     expect(screen.getByText('项目总览')).toBeTruthy()
   })
 
@@ -251,30 +320,32 @@ describe('overview page', () => {
     expect(screen.getAllByText('G2-方案验证').length).toBeGreaterThan(0)
   })
 
-  it('renders the four dimensions as FOUR separate cells per project, never merged', async () => {
+  it('renders the four dimensions as FOUR separate cards on the detail page', async () => {
+    // The v3 overview table carries the spec's seven columns, so the dimension
+    // block lives on the detail page — but the invariant is unchanged: four
+    // dimensions, four separate elements, never one merged "progress" value.
     await renderPage(makeApi())
-    const rows = document.querySelectorAll('.project-row')
-    expect(rows).toHaveLength(3)
-    for (const row of rows) {
-      const cells = row.querySelectorAll('.dim-cell')
-      expect(cells).toHaveLength(4)
-      // Every cell carries its own label and its own present/missing state.
-      const labels = [...cells].map((cell) => cell.querySelector('.dim-label')?.textContent)
-      expect(labels).toEqual(['目标达成', '证据', '客户认可', '下一步'])
-      const marks = [...cells].map((cell) => (cell as HTMLElement).dataset.present)
-      expect(marks).toHaveLength(4)
-    }
-    // The incomplete project shows the exact per-dimension state.
-    const brokenRow = [...rows].find((row) => row.textContent?.includes('某某集团办公网改造'))!
-    const marks = [...brokenRow.querySelectorAll('.dim-cell')].map((cell) => (cell as HTMLElement).dataset.present)
-    expect(marks).toEqual(['false', 'false', 'false', 'false'])
+    fireEvent.click([...document.querySelectorAll('.project-row')].find((row) => row.textContent?.includes('某某制造产线安全接入'))!)
+    await waitFor(() => expect(document.querySelectorAll('.summary-item').length).toBe(4))
+    const cards = [...document.querySelectorAll('.summary-item')]
+    expect(cards.map((card) => card.querySelector('.summary-label')?.firstChild?.textContent)).toEqual(['目标达成', '证据', '客户认可', '下一步'])
+    // Each card carries its own present/missing state.
+    expect(cards.map((card) => (card as HTMLElement).dataset.present)).toEqual(['true', 'true', 'true', 'false'])
   })
 
-  it('marks present and missing dimensions differently', async () => {
-    await renderPage(makeApi())
-    const row = [...document.querySelectorAll('.project-row')].find((candidate) => candidate.textContent?.includes('某某银行零信任试点'))!
-    const cells = [...row.querySelectorAll('.dim-cell')]
-    expect(cells.map((cell) => (cell as HTMLElement).dataset.present)).toEqual(['true', 'true', 'false', 'false'])
+  it('shows a project with nothing filled in as four missing dimensions', async () => {
+    await renderPage(makeApi({
+      detailRecord: {
+        ...detail(),
+        summary: { ...detail().summary, pocId: 'POC-2026-002', name: '某某集团办公网改造', dimensions: { achievement: false, evidence: false, recognition: false, nextMilestone: false }, dimensionCount: 0 },
+        outcome: { ...detail().outcome, achievement: '', customerRecognition: '', ourProof: '', milestone: '' },
+        progress: [],
+      },
+    }))
+    fireEvent.click([...document.querySelectorAll('.project-row')].find((row) => row.textContent?.includes('某某集团办公网改造'))!)
+    await waitFor(() => expect(document.querySelectorAll('.summary-item').length).toBe(4))
+    const cards = [...document.querySelectorAll('.summary-item')]
+    expect(cards.map((card) => (card as HTMLElement).dataset.present)).toEqual(['false', 'false', 'false', 'false'])
   })
 
   it('shows a five-dot G0→G4 rail per row with distinct done/current states', async () => {
@@ -282,8 +353,9 @@ describe('overview page', () => {
     const rows = [...document.querySelectorAll('.project-row')]
     expect(rows).toHaveLength(3)
     for (const row of rows) expect(row.querySelectorAll('.stage-dot')).toHaveLength(5)
-    // POC-001 is at G2 with its G0/G1 gates signed off: the dots follow the
-    // ledger's gate records, and G2 is highlighted as the current stage.
+    // POC-001 is at G2. v3 derives each dot from its own field: G0 complete,
+    // G1 conclusion 通过, G2 ready Ready (so G2 is both done AND current), and
+    // G3/G4 have no confirming record yet.
     const dots = [...rows[0]!.querySelectorAll('.stage-dot')]
     expect(dots.map((dot) => ({
       done: (dot as HTMLElement).dataset.done,
@@ -291,7 +363,7 @@ describe('overview page', () => {
     }))).toEqual([
       { done: 'true', current: 'false' },
       { done: 'true', current: 'false' },
-      { done: 'false', current: 'true' },
+      { done: 'true', current: 'true' },
       { done: 'false', current: 'false' },
       { done: 'false', current: 'false' },
     ])
@@ -301,9 +373,9 @@ describe('overview page', () => {
     await renderPage(makeApi())
     const pending = document.querySelectorAll('.gap-item')
     expect(pending.length).toBeGreaterThanOrEqual(2)
-    // The G4 gap (priority 95) sorts before the G0 gap (priority 90).
-    expect(pending[0]?.textContent).toContain('做成了但没有下一步')
-    expect(pending[1]?.textContent).toContain('G0 缺「客户为什么测」')
+    // R11 (priority 96) sorts before R1 (priority 90).
+    expect(pending[0]?.textContent).toContain('已达成但无下一步里程碑')
+    expect(pending[1]?.textContent).toContain('G0 必填未齐')
     // Severity paints the flag.
     expect(pending[0]?.className).toContain('gap-level-high')
   })
@@ -325,7 +397,7 @@ describe('refresh', () => {
   })
 
   it('shows a clear failure reason and a retry button when a pull fails', async () => {
-    const api = makeApi({ initial: snapshot({ cacheReady: false, projects: [], gaps: [], stats: { active: 0, g0Incomplete: 0, atRisk: 0, convertible: 0, total: 0, closed: 0 } }), failRefresh: '无法连接 github.com' })
+    const api = makeApi({ initial: snapshot({ cacheReady: false, projects: [], gaps: [], stats: { total: 0, g0Passed: 0, inProgress: 0, amountTotalWan: 0, g0Complete: 0, awaitingCustomer: 0, succeeded: 0, stopped: 0 } }), failRefresh: '无法连接 github.com' })
     await renderPage(api)
     fireEvent.click(screen.getByRole('button', { name: '立即刷新' }))
     await waitFor(() => expect(screen.getByText(/拉取失败/)).toBeTruthy())
@@ -461,9 +533,11 @@ describe('detail page', () => {
     fireEvent.click(row)
     await waitFor(() => expect(screen.getByText('某某制造产线安全接入')).toBeTruthy())
     expect(screen.getByText('阶段轨道')).toBeTruthy()
+    expect(screen.getByText('进展流')).toBeTruthy()
     expect(screen.getByText('四维结果')).toBeTruthy()
-    expect(screen.getByText('G0 立项三必填')).toBeTruthy()
-    expect(screen.getByText('时间线')).toBeTruthy()
+    expect(screen.getByText('身份')).toBeTruthy()
+    expect(screen.getByText('计划（G1/G2）')).toBeTruthy()
+    expect(screen.getByText('结论')).toBeTruthy()
   })
 
   it('shows the four dimensions as four separate summary cards', async () => {
@@ -471,18 +545,35 @@ describe('detail page', () => {
     fireEvent.click([...document.querySelectorAll('.project-row')].find((row) => row.textContent?.includes('某某制造产线安全接入'))!)
     await waitFor(() => expect(document.querySelectorAll('.summary-item').length).toBe(4))
     const cards = [...document.querySelectorAll('.summary-item')]
-    expect(cards.map((card) => card.querySelector('.summary-label')?.textContent)).toEqual(['目标达成', '证据', '客户认可', '下一步'])
+    expect(cards.map((card) => card.querySelector('.summary-label')?.firstChild?.textContent)).toEqual(['目标达成', '证据', '客户认可', '下一步'])
     expect(cards.map((card) => (card as HTMLElement).dataset.present)).toEqual(['true', 'true', 'true', 'false'])
   })
 
-  it('shows the timeline rounds in order, with evidence and recognition', async () => {
+  it('shows the progress stream newest-first, with evidence and recognition', async () => {
     await renderPage(makeApi())
     fireEvent.click([...document.querySelectorAll('.project-row')].find((row) => row.textContent?.includes('某某制造产线安全接入'))!)
     await waitFor(() => expect(document.querySelectorAll('.timeline-item').length).toBe(2))
     const items = [...document.querySelectorAll('.timeline-item')]
-    expect(items[0]?.textContent).toContain('2026/09/01')
-    expect(items[1]?.textContent).toContain('正式验收')
-    expect(items[1]?.textContent).toContain('验收报告.pdf')
+    // v3: the progress stream is the history, and the newest entry comes first.
+    expect(items[0]?.textContent).toContain('2026/11/01')
+    expect(items[0]?.textContent).toContain('验收报告.pdf')
+    expect(items[0]?.textContent).toContain('认可')
+    expect(items[1]?.textContent).toContain('2026/09/01')
+  })
+
+  it('shows an explicit empty state when a project has no progress yet', async () => {
+    // The live ledger currently has 23 projects with `progress: []`, so this is
+    // the state the user will actually meet first.
+    await renderPage(makeApi({
+      detailRecord: {
+        ...detail(),
+        progress: [],
+        summary: { ...detail().summary, progressCount: 0, lastProgressDate: null, lastProgressSummary: '' },
+      },
+    }))
+    fireEvent.click([...document.querySelectorAll('.project-row')].find((row) => row.textContent?.includes('某某制造产线安全接入'))!)
+    await waitFor(() => expect(screen.getByText('还没有进展记录')).toBeTruthy())
+    expect(screen.getByText('第一次进展后，这里会显示完整时间线。')).toBeTruthy()
   })
 
   it('returns to the overview with the back button', async () => {
@@ -495,25 +586,6 @@ describe('detail page', () => {
 })
 
 describe('milestone 3 views', () => {
-  it('opens the export page and lists projects with checkboxes', async () => {
-    await renderPage(makeApi())
-    const header = document.querySelector('.header-actions') as HTMLElement
-    fireEvent.click(within(header).getByText('导出表单'))
-    await waitFor(() => expect(document.querySelector('.export-list')).not.toBeNull())
-    expect(document.querySelectorAll('.export-row')).toHaveLength(3)
-    expect(document.querySelectorAll('.export-row input[type="checkbox"]')).toHaveLength(3)
-  })
-
-  it('generates a blank form when nothing is selected', async () => {
-    const api = makeApi()
-    await renderPage(api)
-    const header = document.querySelector('.header-actions') as HTMLElement
-    fireEvent.click(within(header).getByText('导出表单'))
-    await waitFor(() => expect(document.querySelector('.export-list')).not.toBeNull())
-    // Nothing selected: the hint explains a blank form will be produced.
-    expect(screen.getAllByText(/空白/).length).toBeGreaterThan(0)
-  })
-
   it('opens the risk board with rows ordered high → medium → unrated', async () => {
     await renderPage(makeApi())
     const header = document.querySelector('.header-actions') as HTMLElement
@@ -573,9 +645,13 @@ describe('bilingual copy', () => {
     expect(screen.getByText('Work Dashboard · read-only')).toBeTruthy()
     expect(screen.getAllByText('POC Operations').length).toBeGreaterThan(0)
     expect(screen.getByText('Projects')).toBeTruthy()
-    // The four dimension labels stay four separate labels in English too.
-    const labels = [...document.querySelectorAll('.project-row')][0]!.querySelectorAll('.dim-label')
-    expect([...labels].map((label) => label.textContent)).toEqual(['Goal met', 'Evidence', 'Recognition', 'Next step'])
+    // The four dimension labels stay four separate labels in English too, on the
+    // detail page where the v3 model renders them.
+    // The API double only serves POC-2026-003's detail record.
+    fireEvent.click([...document.querySelectorAll('.project-row')].find((row) => row.textContent?.includes('某某制造产线安全接入'))!)
+    await waitFor(() => expect(document.querySelectorAll('.summary-item').length).toBe(4))
+    const labels = [...document.querySelectorAll('.summary-label')].map((node) => node.firstChild?.textContent)
+    expect(labels).toEqual(['Goal met', 'Evidence', 'Recognition', 'Next step'])
   })
 })
 

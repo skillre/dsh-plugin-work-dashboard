@@ -21,7 +21,6 @@ import { dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
-import { runInNewContext } from 'node:vm'
 import { buildLocalFixture, readGhLog } from './lib/local-fixture.mjs'
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -265,18 +264,24 @@ try {
     const missingG0 = first.snapshot.projects.find((candidate) => candidate.pocId === 'POC-2026-002')
     assert.deepEqual(missingG0.dimensions, { achievement: false, evidence: false, recognition: false, nextMilestone: false })
     const rules = new Set(first.snapshot.gaps.map((gap) => gap.rule))
-    assert.ok(rules.has('G0-why-customer') && rules.has('G4-no-next-milestone'), 'the G0 and G4 rules must fire on the fixtures')
-    assert.equal(first.snapshot.gaps[0].rule, 'G4-no-next-milestone', 'the highest-value gap must sort first')
+    assert.ok(rules.has('R1-gate0-missing') && rules.has('R11-no-next-milestone'), 'the R1 and R11 rules must fire on the fixtures')
+    assert.equal(first.snapshot.gaps[0].rule, 'R11-no-next-milestone', 'the highest-value gap must sort first')
+    // v3 headline counters: total, G0 passed, in progress, amount sum.
+    assert.equal(first.snapshot.stats.total, 3)
+    assert.equal(first.snapshot.stats.g0Passed, 2)
+    assert.equal(first.snapshot.stats.amountTotalWan, 2600)
     report.endpoint.board = { stats: first.snapshot.stats, gaps: first.snapshot.gaps.length, firstRule: first.snapshot.gaps[0].rule }
     checks.push('api-board-computed')
 
-    // 4. Detail page: the full record with five gates and the timeline.
+    // 4. Detail page: the v3 record with the progress stream.
     const detail = await rpcOk(origin, cookie, { action: 'detail', pocId: 'POC-2026-003' })
     assert.equal(detail.summary.pocId, 'POC-2026-003')
-    assert.deepEqual(detail.gates.map((gate) => gate.stage), ['G0', 'G1', 'G2', 'G3', 'G4'])
-    assert.equal(detail.timeline.length, 3)
-    assert.equal(detail.result.next_milestone, '')
-    report.endpoint.detail = { gates: detail.gates.length, timeline: detail.timeline.length }
+    assert.equal(detail.gate0.conclusion, '通过')
+    assert.equal(detail.progress.length, 2, 'the progress stream is the v3 history')
+    assert.equal(detail.progress[1].gate3_2, '已确认')
+    assert.equal(detail.outcome.achievement, '达成')
+    assert.equal(detail.outcome.milestone, '')
+    report.endpoint.detail = { progress: detail.progress.length, achievement: detail.outcome.achievement }
     checks.push('api-detail')
 
     // 5. Second refresh must fast-forward, not re-clone.
@@ -311,136 +316,7 @@ try {
     checks.push('cache-is-real-clone')
     checks.push('cache-credential-not-persisted')
 
-    // ---- milestone 3: export form, risk board, timeline --------------------
-
-    // 20a. Export one project: a self-contained HTML form.
-    const exported = await rpcOk(origin, cookie, { action: 'export', pocIds: ['POC-2026-001'], mode: 'fill' })
-    assert.ok(exported.html.startsWith('<!DOCTYPE html>'), 'the export must be a complete HTML document')
-    assert.ok(exported.html.length > 15000, `the form looks too small: ${exported.html.length} bytes`)
-    assert.ok(!/https?:\/\//.test(exported.html), 'the form must not reference an external URL')
-    assert.ok(!/<script[^>]+src=/.test(exported.html), 'the form must not load an external script')
-    assert.ok(!/<link\b/.test(exported.html), 'the form must not load an external stylesheet')
-    assert.equal(exported.mode, 'fill')
-    assert.deepEqual(exported.pocIds, ['POC-2026-001'])
-    report.endpoint.export = { fileName: exported.fileName, bytes: exported.bytes }
-    checks.push('api-export-single-form')
-    checks.push('export-is-self-contained')
-
-    // 20b. Batch export: several projects in ONE form.
-    const batch = await rpcOk(origin, cookie, { action: 'export', pocIds: ['POC-2026-001', 'POC-2026-003'], mode: 'fill' })
-    assert.equal(batch.pocIds.length, 2, 'the batch form must cover both projects')
-    assert.ok(batch.html.includes('POC-2026-001') && batch.html.includes('POC-2026-003'), 'both ids must be embedded')
-    assert.ok(batch.bytes > exported.bytes, 'a two-project form must be larger than a one-project form')
-    checks.push('api-export-batch-form')
-
-    // 20c. A blank form for a new project.
-    const blankForm = await rpcOk(origin, cookie, { action: 'export', pocIds: [], mode: 'blank' })
-    assert.equal(blankForm.mode, 'blank')
-    assert.deepEqual(blankForm.pocIds, [])
-    assert.ok(blankForm.html.includes('poc-form-draft-blank'), 'a blank form must use the constant draft key')
-    checks.push('api-export-blank-form')
-
-    // 20d. THE ROUND TRIP: the form's own serializer output must be parseable by
-    //      the plugin's validator, which is what makes "fill in, send back, import"
-    //      actually work. Extract the page's YAML by running its script.
-    const pageScript = exported.html.match(/<script>([\s\S]*?)<\/script>/)
-    assert.ok(pageScript, 'the exported form must carry its inline script')
-    const parsedFromForm = await new Promise((resolve, reject) => {
-      const captured = []
-      const elements = new Map()
-      const makeElement = (id) => ({
-        id, textContent: '', innerHTML: '', hidden: false, disabled: false, style: {},
-        scrollIntoView: () => {}, getAttribute: () => null, closest: () => null,
-        addEventListener: (event, handler) => { handlers.set(id + ':' + event, handler) },
-      })
-      const handlers = new Map()
-      for (const id of ['saveStatus', 'clearBtn', 'previewBtn', 'downloadBtn', 'footerInfo', 'yamlPreview', 'toast', 'formBody', 'restoreNotice', 'draftNotice']) elements.set(id, makeElement(id))
-      const context = {
-        document: {
-          getElementById: (id) => elements.get(id) ?? null,
-          addEventListener: () => {},
-          createElement: () => ({ click: () => {}, href: '', download: '', setAttribute: () => {} }),
-        },
-        localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
-        setTimeout: (fn) => { if (typeof fn === 'function') fn(); return 0 }, clearTimeout: () => {}, setInterval: () => 0,
-        Blob: class { constructor(parts) { captured.push(parts.join('')) } },
-        URL: { createObjectURL: () => 'blob:1', revokeObjectURL: () => {} },
-        window: { addEventListener: () => {} },
-        Date, JSON, Math, String, Number, Object, Array, console,
-        confirm: () => true, location: { reload: () => {} },
-      }
-      try {
-        runInNewContext(pageScript[1], context)
-        const preview = handlers.get('previewBtn:click')
-        if (preview) preview()
-        resolve(captured[0] ?? (elements.get('yamlPreview') ?? {}).textContent ?? '')
-      } catch (error) {
-        reject(error)
-      }
-    })
-    assert.ok(typeof parsedFromForm === 'string' && parsedFromForm.includes('poc_id:'), 'the form must produce YAML text')
-    // Strip the generated header comments and validate it with the plugin itself.
-    const yamlBody = parsedFromForm.split('\n').filter((line) => !line.startsWith('#')).join('\n')
-    // The import page is gone, so the round trip is verified against the same
-    // YAML library the Host uses: the form's own serializer output must parse and
-    // reproduce the ledger record field-for-field.
-    const YAML = (await import('yaml')).default
-    const parsedForm = YAML.parse(yamlBody)
-    assert.equal(parsedForm.poc_id, 'POC-2026-001', 'the form output must carry the project id')
-    assert.equal(parsedForm.name, '某某银行零信任试点')
-    const storedDoc = YAML.parse(await readFile(join(env.WD_TEST_CACHE_ROOT, 'repo', 'projects', 'POC-2026-001.yaml'), 'utf8'))
-    for (const key of ['poc_id', 'name', 'type', 'tier', 'stage', 'owner', 'sales_initiator', 'customer_tech_owner', 'why_customer_test', 'why_we_test', 'next_action_goal']) {
-      assert.equal(parsedForm[key], storedDoc[key] ?? '', `field ${key} must round-trip unchanged`)
-    }
-    assert.deepEqual(parsedForm.success_criteria, storedDoc.success_criteria ?? [])
-    assert.deepEqual(parsedForm.success_scenarios, storedDoc.success_scenarios ?? [])
-    checks.push('export-form-yaml-round-trips')
-    checks.push('export-form-round-trip-is-lossless')
-
-    // 20d-2. A BATCH form must not produce one invalid concatenation: each
-    //        project gets its own valid document. This is the regression check
-    //        for a defect the HTML-level assertion missed.
-    const batchDocs = await new Promise((resolve, reject) => {
-      const captured = []
-      const elements = new Map()
-      const handlers = new Map()
-      const makeElement = (id) => ({
-        id, textContent: '', innerHTML: '', hidden: false, disabled: false, style: {},
-        scrollIntoView: () => {}, getAttribute: () => null, closest: () => null,
-        addEventListener: (event, handler) => { handlers.set(id + ':' + event, handler) },
-      })
-      for (const id of ['saveStatus', 'clearBtn', 'previewBtn', 'downloadBtn', 'footerInfo', 'yamlPreview', 'toast', 'formBody', 'restoreNotice', 'draftNotice']) elements.set(id, makeElement(id))
-      const context = {
-        document: {
-          getElementById: (id) => elements.get(id) ?? null,
-          addEventListener: () => {},
-          createElement: () => ({ click: () => {}, href: '', download: '', setAttribute: () => {} }),
-        },
-        localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
-        setTimeout: (fn) => { if (typeof fn === 'function') fn(); return 0 }, clearTimeout: () => {}, setInterval: () => 0,
-        Blob: class { constructor(parts) { captured.push(parts.join('')) } },
-        URL: { createObjectURL: () => 'blob:1', revokeObjectURL: () => {} },
-        window: { addEventListener: () => {} },
-        Date, JSON, Math, String, Number, Object, Array, console,
-        confirm: () => true, location: { reload: () => {} },
-      }
-      try {
-        const script = batch.html.match(/<script>([\s\S]*?)<\/script>/)
-        runInNewContext(script[1], context)
-        const download = handlers.get('downloadBtn:click')
-        if (download) download()
-        resolve({ captured, preview: (elements.get('yamlPreview') ?? {}).textContent ?? '' })
-      } catch (error) { reject(error) }
-    })
-    // The page downloads one file per project; every captured document must
-    // parse on its own.
-    assert.ok(batchDocs.captured.length === 2, `a two-project form must download two files, got ${batchDocs.captured.length}`)
-    for (const doc of batchDocs.captured) {
-      const body = doc.split('\n').filter((line) => !line.startsWith('#')).join('\n')
-      assert.ok(body.includes('poc_id:'), 'each downloaded file must carry a poc_id')
-      assert.equal((body.match(/^poc_id:/gm) ?? []).length, 1, 'each downloaded file must hold exactly ONE project')
-    }
-    checks.push('api-export-batch-is-valid-yaml')
+    // ---- v3: risk board and global timeline (the export form is deferred) ---
 
     // 20e. The risk board is ordered by severity.
     const risks = await rpcOk(origin, cookie, { action: 'risks' })
@@ -452,7 +328,7 @@ try {
     report.endpoint.risks = { rows: risks.rows.length, counts: risks.counts }
     checks.push('api-risk-board-sorted')
 
-    // 20f. The global timeline is newest-first and names the silent projects.
+    // 20f. The global timeline is newest-first over progress[] entries.
     const timeline = await rpcOk(origin, cookie, { action: 'timeline' })
     assert.ok(Array.isArray(timeline.entries), 'the timeline must return entries')
     for (let index = 1; index < timeline.entries.length; index += 1) {

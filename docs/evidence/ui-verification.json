@@ -1,16 +1,17 @@
 {
   "package": "@skillre/dsh-plugin-work-dashboard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "dsh": "0.2.2-rc.1",
-  "verifiedAt": "2026-11-05",
-  "target": "DSH Web UI (standalone Web application, headless Chromium over CDP)",
+  "verifiedAt": "2026-11-06",
+  "target": "DSH Web UI (headless Chromium over CDP)",
   "viewport": "1440x900 @2x",
   "profile": "owned, disposable, non-Desktop web profile",
+  "dataModel": "v3 (23-project workbranch ledger shape, exercised via the local v3 fixture)",
   "tarball": {
-    "path": "skillre-dsh-plugin-work-dashboard-0.1.0.tgz",
-    "sha256": "220f3424845aa9ba5359732b92320ff945acb57d480731955122e7a6d7bb5354"
+    "path": "skillre-dsh-plugin-work-dashboard-0.2.0.tgz",
+    "sha256": "f28928fdc35769a446c35cbd25f18b28d11c5bcaef56de21c68ce0f8e72fcc01"
   },
-  "total": 50,
+  "total": 43,
   "failed": 0,
   "checks": [
     "shell-overlays-dismissed",
@@ -25,16 +26,15 @@
     "refresh-shows-progress",
     "refresh-clones-and-renders",
     "stat-grid-four-counters",
-    "four-dimension-cells-per-row",
-    "four-dimension-cells-labelled",
-    "four-dimension-state-is-per-dimension",
+    "table-has-v3-columns",
+    "table-shows-amount",
+    "table-shows-latest-progress",
     "stage-track-visible",
     "pending-list-ordered",
     "detail-page-opens",
     "detail-stage-rail-five-steps",
     "detail-four-dimension-cards",
-    "detail-timeline-rendered",
-    "detail-gate-rows",
+    "detail-progress-stream",
     "detail-sections-present",
     "back-to-overview",
     "settings-dialog-opens",
@@ -47,13 +47,6 @@
     "refresh-failure-shows-reason",
     "refresh-failure-offers-retry",
     "failure-keeps-the-board-visible",
-    "export-entry-present",
-    "export-page-lists-projects",
-    "export-explains-blank-form",
-    "export-multi-select",
-    "export-generates-file",
-    "export-file-is-self-contained",
-    "export-file-has-autosave-and-validation",
     "risk-entry-present",
     "risk-board-sorted-by-severity",
     "risk-board-shows-counters",
@@ -61,6 +54,7 @@
     "timeline-renders-newest-first",
     "timeline-shows-month-strip",
     "timeline-names-silent-projects",
+    "no-raw-template-placeholders",
     "no-uncaught-console-errors",
     "dark-theme-applies"
   ],
@@ -68,18 +62,26 @@
     "docs/evidence/work-dashboard-empty.png",
     "docs/evidence/work-dashboard-board.png",
     "docs/evidence/work-dashboard-detail.png",
-    "docs/evidence/work-dashboard-light.png",
     "docs/evidence/work-dashboard-dark.png"
   ],
-  "rebrand": {
-    "package": "@skillre/dsh-plugin-work-dashboard",
-    "rowId": "skillre-work-dashboard",
-    "sidebarEntry": "工作看板",
-    "pageTitle": "POC 运营 (module name)",
-    "eyebrow": "工作看板 · 只读 (shell identity)",
-    "moduleRail": "one module tab: POC 运营; a hint seat for future modules",
-    "removedModule": "导入数据 (whole import/create/validate/diff/PR path deleted)",
-    "cacheRoot": "~/.dsh/cache/work-dashboard"
+  "v3Migration": {
+    "parser": "projects/*.yaml re-parsed as identity + gate0 + plan + progress[] + outcome",
+    "fourDimensions": "read from outcome (achievement / our_proof / customer_recognition / business.milestone), each card tagged 自动推导 vs 人工填",
+    "progressStream": "NEW — the core: every progress entry rendered as a timeline node with goal, items, actual, completion, evidence chips, customer sync/recognition, gate3_1/gate3_2 and next step",
+    "gapRules": "8 -> 12 (R1..R12), each pinned by its own unit test",
+    "stats": "POC总数 / G0通过 / 进行中 / 金额合计 (sum of amount_wan)",
+    "table": "项目 | 体系/公司 | 阶段 | 金额 | 最新进展 | 缺口 | 操作",
+    "deferred": "导出表单 hidden (v1 field model kept in src/form.v1-deferred.ts) pending the P1 v3 rewrite"
   },
-  "notes": "The dashboard was renamed to 工作看板 and restructured as a multi-module container: the sidebar entry and plugin card read 工作看板, the page title is the module name (POC 运营), the shell identity sits in an eyebrow, and a module tab rail marks the only module today while leaving a visible seat for future ones. The whole 导入数据 module was deleted — its Host actions (validate/submit/template), the pr/validate/diff/template modules, the import and create pages, and the draft-PR write path are gone, so the plugin is now strictly read-only. The visual layer was rebuilt: a three-level surface ramp with one shadow ramp, gradient primary buttons, accent-backed stat cards, layered panels with tinted headers, a module tab strip, uppercase table headers, ring-highlighted current stage markers, and a full dark-theme palette. 50/50 assertions passed in both themes with no uncaught page errors. A real defect was found and fixed during verification: the client bundle used the classic JSX transform with no React binding in scope, so the sidebar entry crashed with 'React is not defined'; the build now emits the automatic react/jsx-runtime, pinned by a regression test."
+  "acceptance": {
+    "projects": 23,
+    "amountTotalWan": 6050,
+    "g0Passed": 1,
+    "g0Complete": 0,
+    "r1Hits": 23,
+    "r2Hits": 7,
+    "poc006": "1500万 / G0未评审 / 缺2项 / 0进展",
+    "progressTimeline": "empty for all 23 today (progress: [] everywhere)"
+  },
+  "notes": "Rewritten for the v3 ledger model. Verified against the REAL v3 data (all 23 files from the workbranch ledger copy) before any UI work: 23 projects, 6050万 total, 1 G0 passed, 0 G0 complete, R1 firing on all 23, R2 on 7 — exactly the acceptance numbers in the update note. The UI was then driven in headless Chromium with the v3 fixture: 43/43 assertions passed, including the new progress-stream section, the seven v3 table columns, the amount column and a check that no raw template placeholder leaks into the DOM. Two real defects were found and fixed during verification: (1) gap TITLES were rendered with t() instead of format(), so parameterised titles showed literal {amountWan}; (2) the identity line still used the v1 {tier} key, which no longer exists in v3. The four-dimension invariant is preserved but moved to the detail page: the v3 overview table has the spec's seven columns, and four separate dimension cards render on the detail page."
 }

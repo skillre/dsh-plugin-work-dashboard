@@ -17,15 +17,16 @@ describe('resolveConfig', () => {
       defaultBranch: 'main',
       cloneTimeoutMs: 120_000,
       fetchTimeoutMs: 60_000,
-      staleDays: 30,
+      // v3 rule 12: a project is stalled after 45 days in one stage.
+      stallDays: 45,
     })
   })
 
   it('keeps a valid override', () => {
-    const config = resolveConfig({ repository: 'skillre/other-repo', cacheRoot: '/tmp/work-dashboard-cache', staleDays: 7 })
+    const config = resolveConfig({ repository: 'skillre/other-repo', cacheRoot: '/tmp/work-dashboard-cache', stallDays: 7 })
     expect(config.repository).toBe('skillre/other-repo')
     expect(config.cacheRoot).toBe('/tmp/work-dashboard-cache')
-    expect(config.staleDays).toBe(7)
+    expect(config.stallDays).toBe(7)
   })
 
   it('rejects a repository that is not owner/name', () => {

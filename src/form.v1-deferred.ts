@@ -1,4 +1,20 @@
 /**
+ * DEFERRED — v1 export form, kept for the P1 rewrite.
+ *
+ * This generator models the v1 project shape (`why_customer_test`,
+ * `success_criteria`, `result`, `timeline`). The v3 model replaced all of those,
+ * so this file does not compile against the current `PocRecord` and is excluded
+ * from the build. The export entry point is hidden until P1 rewrites it for v3:
+ * shipping a form that asks v1 questions and emits v1 YAML would hand colleagues
+ * a file the ledger can no longer read.
+ *
+ * It is kept in-tree (not deleted) because the v3 rewrite should reuse its
+ * hard-won parts: the single-file/no-CDN packaging, the project-set-derived
+ * autosave key, the ES5 serializer with correct YAML quoting, and the
+ * one-document-per-project batch download.
+ */
+
+/**
  * Self-contained HTML form generator.
  *
  * Design rules, taken from the specification and from the reference
@@ -20,42 +36,90 @@
  * The generated script is plain ES5-compatible JavaScript: no build step, no
  * imports, nothing that needs a modern runtime beyond `localStorage` and `Blob`.
  */
-import YAML from 'yaml';
-/** The documented enums, mirrored from the schema. */
-const STAGES = [
-    ['G0-立项', 'G0 立项'],
-    ['G1-方案设计', 'G1 方案设计'],
-    ['G2-方案验证', 'G2 方案验证'],
-    ['G3-结果验证', 'G3 结果验证'],
-    ['G4-结果转化', 'G4 结果转化'],
-    ['closed', '已关闭'],
-];
-const TYPES = [
-    ['customer-pilot', '客户试点'],
-    ['tech-validation', '技术验证'],
-    ['solution-compare', '方案对比'],
-];
-const TIERS = [
-    ['strategic', '战略级'],
-    ['high-value', '高价值'],
-    ['normal', '常规'],
-];
-const RISK_LEVELS = [
-    ['high', '高'],
-    ['medium', '中'],
-    ['low', '低'],
-];
-const RECOGNITION_SCOPES = ['无', '口头', '书面', '正式验收'];
-/** Coerce a stored value to the string the form edits. */
-function text(value) {
-    if (value === null || value === undefined)
-        return '';
-    if (typeof value === 'string')
-        return value;
-    if (typeof value === 'number' || typeof value === 'boolean')
-        return String(value);
-    return '';
+
+import YAML from 'yaml'
+import type { PocRecord } from './types.js'
+
+/** The project shape the form edits; a subset of {@link PocRecord}. */
+export interface FormProject {
+  poc_id: string
+  name: string
+  type: string
+  tier: string
+  stage: string
+  owner: string
+  sales_initiator: string
+  customer_tech_owner: string
+  why_customer_test: string
+  why_we_test: string
+  next_action_goal: string
+  gates: Record<string, unknown>
+  success_criteria: Array<{ name: string; version: string; metric: string }>
+  success_scenarios: string[]
+  risks: Array<{ name: string; level: string; mitigation: string }>
+  result: { achievement: string; evidence: string; recognition: string; next_milestone: string }
+  timeline: Array<Record<string, unknown>>
 }
+
+/** Options for one generation run. */
+export interface FormOptions {
+  /** `fill` pre-fills from the ledger; `blank` is an empty new-project form. */
+  mode: 'fill' | 'blank'
+  /** Projects to include; one blank project for `blank` mode. */
+  projects: FormProject[]
+  /** Clock injection so the generated header is testable. */
+  now?: Date
+}
+
+/** Everything the form needs, serialized into the page. */
+interface FormPayload {
+  mode: 'fill' | 'blank'
+  generatedAt: string
+  projects: FormProject[]
+  /** Stable draft key: same projects ⇒ same draft, regenerated or not. */
+  draftKey: string
+  /** The documented option lists, so the page and the plugin never disagree. */
+  stages: Array<[string, string]>
+  types: Array<[string, string]>
+  tiers: Array<[string, string]>
+  riskLevels: Array<[string, string]>
+  recognitionScopes: string[]
+}
+
+/** The documented enums, mirrored from the schema. */
+const STAGES: Array<[string, string]> = [
+  ['G0-立项', 'G0 立项'],
+  ['G1-方案设计', 'G1 方案设计'],
+  ['G2-方案验证', 'G2 方案验证'],
+  ['G3-结果验证', 'G3 结果验证'],
+  ['G4-结果转化', 'G4 结果转化'],
+  ['closed', '已关闭'],
+]
+const TYPES: Array<[string, string]> = [
+  ['customer-pilot', '客户试点'],
+  ['tech-validation', '技术验证'],
+  ['solution-compare', '方案对比'],
+]
+const TIERS: Array<[string, string]> = [
+  ['strategic', '战略级'],
+  ['high-value', '高价值'],
+  ['normal', '常规'],
+]
+const RISK_LEVELS: Array<[string, string]> = [
+  ['high', '高'],
+  ['medium', '中'],
+  ['low', '低'],
+]
+const RECOGNITION_SCOPES = ['无', '口头', '书面', '正式验收']
+
+/** Coerce a stored value to the string the form edits. */
+function text(value: unknown): string {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return ''
+}
+
 /**
  * Convert one ledger record into the form's project shape.
  *
@@ -63,75 +127,77 @@ function text(value) {
  * HTML/JS page with no schema awareness, so the Host does the normalization
  * once here instead of repeating it in the generated script.
  */
-export function projectForForm(record) {
-    const gates = record.gates ?? {};
-    const result = record.result ?? {};
-    const criteria = Array.isArray(record.success_criteria) ? record.success_criteria : [];
-    const risks = Array.isArray(record.risks) ? record.risks : [];
-    const scenarios = Array.isArray(record.success_scenarios) ? record.success_scenarios : [];
-    const timeline = Array.isArray(record.timeline) ? record.timeline : [];
-    return {
-        poc_id: text(record.poc_id),
-        name: text(record.name),
-        type: text(record.type),
-        tier: text(record.tier),
-        stage: text(record.stage),
-        owner: text(record.owner),
-        sales_initiator: text(record.sales_initiator),
-        customer_tech_owner: text(record.customer_tech_owner),
-        why_customer_test: text(record.why_customer_test),
-        why_we_test: text(record.why_we_test),
-        next_action_goal: text(record.next_action_goal),
-        // Gates are carried through verbatim: the form shows them read-only and
-        // writes them back unchanged, so a fill-in session cannot silently reset a
-        // gate that was already signed off.
-        gates: JSON.parse(JSON.stringify(gates)),
-        success_criteria: criteria.map((item) => ({
-            name: text(item?.name),
-            version: text(item?.version),
-            metric: text(item?.metric),
-        })),
-        success_scenarios: scenarios.map(text).filter((item) => item !== ''),
-        risks: risks.map((item) => ({
-            name: text(item?.name),
-            level: text(item?.level).toLowerCase(),
-            mitigation: text(item?.mitigation),
-        })),
-        result: {
-            achievement: text(result.achievement),
-            evidence: text(result.evidence),
-            recognition: text(result.recognition),
-            next_milestone: text(result.next_milestone),
-        },
-        timeline: timeline.map((entry) => ({ ...entry })),
-    };
+export function projectForForm(record: PocRecord): FormProject {
+  const gates = record.gates ?? {}
+  const result = record.result ?? {}
+  const criteria = Array.isArray(record.success_criteria) ? record.success_criteria : []
+  const risks = Array.isArray(record.risks) ? record.risks : []
+  const scenarios = Array.isArray(record.success_scenarios) ? record.success_scenarios : []
+  const timeline = Array.isArray(record.timeline) ? record.timeline : []
+  return {
+    poc_id: text(record.poc_id),
+    name: text(record.name),
+    type: text(record.type),
+    tier: text(record.tier),
+    stage: text(record.stage),
+    owner: text(record.owner),
+    sales_initiator: text(record.sales_initiator),
+    customer_tech_owner: text(record.customer_tech_owner),
+    why_customer_test: text(record.why_customer_test),
+    why_we_test: text(record.why_we_test),
+    next_action_goal: text(record.next_action_goal),
+    // Gates are carried through verbatim: the form shows them read-only and
+    // writes them back unchanged, so a fill-in session cannot silently reset a
+    // gate that was already signed off.
+    gates: JSON.parse(JSON.stringify(gates)) as Record<string, unknown>,
+    success_criteria: criteria.map((item) => ({
+      name: text((item as Record<string, unknown>)?.name),
+      version: text((item as Record<string, unknown>)?.version),
+      metric: text((item as Record<string, unknown>)?.metric),
+    })),
+    success_scenarios: scenarios.map(text).filter((item) => item !== ''),
+    risks: risks.map((item) => ({
+      name: text((item as Record<string, unknown>)?.name),
+      level: text((item as Record<string, unknown>)?.level).toLowerCase(),
+      mitigation: text((item as Record<string, unknown>)?.mitigation),
+    })),
+    result: {
+      achievement: text(result.achievement),
+      evidence: text(result.evidence),
+      recognition: text(result.recognition),
+      next_milestone: text(result.next_milestone),
+    },
+    timeline: timeline.map((entry) => ({ ...(entry as Record<string, unknown>) })),
+  }
 }
+
 /** The blank project a `blank`-mode form edits. */
-export function blankProject() {
-    return {
-        poc_id: '',
-        name: '',
-        type: '',
-        tier: '',
-        stage: 'G0-立项',
-        owner: '',
-        sales_initiator: '',
-        customer_tech_owner: '',
-        why_customer_test: '',
-        why_we_test: '',
-        next_action_goal: '',
-        gates: {
-            G0: { complete: false, date: null },
-            G1: { complete: false, date: null, indicators_count: 0, scenarios_count: 0, risks_count: 0 },
-            G2: { complete: false, date: null, prerequisites_ready: false, engineers_invested: false },
-        },
-        success_criteria: [],
-        success_scenarios: [],
-        risks: [],
-        result: { achievement: '', evidence: '', recognition: '', next_milestone: '' },
-        timeline: [],
-    };
+export function blankProject(): FormProject {
+  return {
+    poc_id: '',
+    name: '',
+    type: '',
+    tier: '',
+    stage: 'G0-立项',
+    owner: '',
+    sales_initiator: '',
+    customer_tech_owner: '',
+    why_customer_test: '',
+    why_we_test: '',
+    next_action_goal: '',
+    gates: {
+      G0: { complete: false, date: null },
+      G1: { complete: false, date: null, indicators_count: 0, scenarios_count: 0, risks_count: 0 },
+      G2: { complete: false, date: null, prerequisites_ready: false, engineers_invested: false },
+    },
+    success_criteria: [],
+    success_scenarios: [],
+    risks: [],
+    result: { achievement: '', evidence: '', recognition: '', next_milestone: '' },
+    timeline: [],
+  }
 }
+
 /**
  * Build the stable draft key.
  *
@@ -139,11 +205,11 @@ export function blankProject() {
  * of projects always resumes the same draft — even if the user regenerates the
  * form later. A blank form gets a constant key so its draft survives too.
  */
-export function draftKeyFor(mode, pocIds) {
-    if (mode === 'blank')
-        return 'poc-form-draft-blank';
-    return `poc-form-draft-${[...pocIds].sort().join('+')}`;
+export function draftKeyFor(mode: 'fill' | 'blank', pocIds: readonly string[]): string {
+  if (mode === 'blank') return 'poc-form-draft-blank'
+  return `poc-form-draft-${[...pocIds].sort().join('+')}`
 }
+
 /**
  * Serialize one project back to YAML.
  *
@@ -152,28 +218,29 @@ export function draftKeyFor(mode, pocIds) {
  * implementation's hand-built strings did not do (a `metric: 成功率 ≥ 99.5%`
  * was fine, but `name: 某某：试点` produced invalid YAML).
  */
-export function projectToYaml(project) {
-    const document = {
-        poc_id: project.poc_id,
-        name: project.name,
-        type: project.type,
-        tier: project.tier,
-        stage: project.stage,
-        owner: project.owner,
-        sales_initiator: project.sales_initiator,
-        customer_tech_owner: project.customer_tech_owner,
-        why_customer_test: project.why_customer_test,
-        why_we_test: project.why_we_test,
-        next_action_goal: project.next_action_goal,
-        gates: project.gates,
-        success_criteria: project.success_criteria,
-        success_scenarios: project.success_scenarios,
-        risks: project.risks,
-        result: project.result,
-        timeline: project.timeline,
-    };
-    return YAML.stringify(document, { lineWidth: 0 });
+export function projectToYaml(project: FormProject): string {
+  const document = {
+    poc_id: project.poc_id,
+    name: project.name,
+    type: project.type,
+    tier: project.tier,
+    stage: project.stage,
+    owner: project.owner,
+    sales_initiator: project.sales_initiator,
+    customer_tech_owner: project.customer_tech_owner,
+    why_customer_test: project.why_customer_test,
+    why_we_test: project.why_we_test,
+    next_action_goal: project.next_action_goal,
+    gates: project.gates,
+    success_criteria: project.success_criteria,
+    success_scenarios: project.success_scenarios,
+    risks: project.risks,
+    result: project.result,
+    timeline: project.timeline,
+  }
+  return YAML.stringify(document, { lineWidth: 0 })
 }
+
 /**
  * Escape a value for embedding inside a `<script>` block.
  *
@@ -181,40 +248,43 @@ export function projectToYaml(project) {
  * brackets are escaped to their JSON unicode forms — the only sequence that can
  * terminate a script element. Everything else survives as plain JSON.
  */
-function scriptSafe(json) {
-    return json.replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+function scriptSafe(json: string): string {
+  return json.replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')
 }
+
 /** Escape text for HTML content. */
-function escapeHtml(value) {
-    return value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
+
 /**
  * Generate the complete HTML form.
  *
  * The returned string is the whole document: no external stylesheet, script,
  * font, or image reference.
  */
-export function buildFormHtml(options) {
-    const now = options.now ?? new Date();
-    const projects = options.mode === 'blank' ? [blankProject()] : options.projects;
-    const payload = {
-        mode: options.mode,
-        generatedAt: now.toISOString(),
-        projects,
-        draftKey: draftKeyFor(options.mode, projects.map((project) => project.poc_id).filter((id) => id !== '')),
-        stages: STAGES,
-        types: TYPES,
-        tiers: TIERS,
-        riskLevels: RISK_LEVELS,
-        recognitionScopes: RECOGNITION_SCOPES,
-    };
-    const data = scriptSafe(JSON.stringify(payload));
-    const title = options.mode === 'blank' ? 'POC 新建项目表单' : `POC 信息收集表单（${projects.length} 个项目）`;
-    return `<!DOCTYPE html>
+export function buildFormHtml(options: FormOptions): string {
+  const now = options.now ?? new Date()
+  const projects = options.mode === 'blank' ? [blankProject()] : options.projects
+  const payload: FormPayload = {
+    mode: options.mode,
+    generatedAt: now.toISOString(),
+    projects,
+    draftKey: draftKeyFor(options.mode, projects.map((project) => project.poc_id).filter((id) => id !== '')),
+    stages: STAGES,
+    types: TYPES,
+    tiers: TIERS,
+    riskLevels: RISK_LEVELS,
+    recognitionScopes: RECOGNITION_SCOPES,
+  }
+  const data = scriptSafe(JSON.stringify(payload))
+  const title = options.mode === 'blank' ? 'POC 新建项目表单' : `POC 信息收集表单（${projects.length} 个项目）`
+
+  return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -256,8 +326,9 @@ export function buildFormHtml(options) {
 </script>
 </body>
 </html>
-`;
+`
 }
+
 /** Styles: one inline sheet, the design tokens from DESIGN.md. */
 const FORM_CSS = `
 :root{--primary:#2864E8;--text:#192638;--bg:#F5F7FB;--border:#E6EBF2;--green:#218568;--amber:#B77919;--red:#C0392B;--muted:#6B7C93}
@@ -311,7 +382,8 @@ body{font-family:'Avenir Next','PingFang SC','Microsoft YaHei',system-ui,sans-se
 .toast{position:fixed;top:80px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:9px 18px;border-radius:6px;font-size:13px;z-index:200}
 @media(max-width:640px){body{padding:12px}.card{padding:16px}.topbar{flex-direction:column}}
 @media print{.topbar,.footer,.topbar-actions{position:static}}
-`;
+`
+
 /**
  * The generated page script.
  *
@@ -825,16 +897,16 @@ const FORM_SCRIPT = `
   // A periodic save covers the case where the user edits and never blurs.
   setInterval(function () { save(true); }, 30000);
   window.addEventListener('beforeunload', function () { save(true); });
-`;
+`
+
 /** Suggest a file name for the generated form. */
-export function formFileName(options) {
-    const now = options.now ?? new Date();
-    const stamp = now.toISOString().slice(0, 10).replace(/-/g, '');
-    if (options.mode === 'blank')
-        return `poc-form-new-${stamp}.html`;
-    if (options.pocIds.length === 1)
-        return `poc-form-${options.pocIds[0]}-${stamp}.html`;
-    return `poc-forms-${options.pocIds.length}-${stamp}.html`;
+export function formFileName(options: { mode: 'fill' | 'blank'; pocIds: readonly string[]; now?: Date }): string {
+  const now = options.now ?? new Date()
+  const stamp = now.toISOString().slice(0, 10).replace(/-/g, '')
+  if (options.mode === 'blank') return `poc-form-new-${stamp}.html`
+  if (options.pocIds.length === 1) return `poc-form-${options.pocIds[0]}-${stamp}.html`
+  return `poc-forms-${options.pocIds.length}-${stamp}.html`
 }
+
 /** Re-export the YAML library's parse for the round-trip test. */
-export { YAML };
+export { YAML }

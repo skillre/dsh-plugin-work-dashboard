@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { DIMENSIONS, STAGES, type DimensionKey, type GapItem, type PocRecord, type ProjectDetail, type ProjectSummary, type RefreshInterval, type Snapshot, type StageId } from '../types.js'
+import { DIMENSIONS, STAGES, type DimensionKey, type GapItem, type PocRecord, type ProgressView, type ProjectDetail, type ProjectSummary, type RefreshInterval, type Snapshot, type StageId } from '../types.js'
 import { ActionError } from './api.js'
 import type { ClientApi } from './api.js'
 import type { ClientLocaleLike } from './contracts.js'
@@ -30,7 +30,7 @@ import {
   writePreference,
   type RefreshPreference,
 } from './preferences.js'
-import { ExportPage, RiskBoardPage, TimelinePage } from './insights.jsx'
+import { RiskBoardPage, TimelinePage } from './insights.jsx'
 import { CONSOLE_CSS } from './styles.js'
 import { format, type Translate } from './text.js'
 import { CUSTOM_MINUTES_MAX, CUSTOM_MINUTES_MIN } from '../types.js'
@@ -40,7 +40,6 @@ type Page =
   | { kind: 'overview' }
   | { kind: 'detail'; pocId: string }
   /** Import an uploaded file: `pocId: null` means a brand-new project. */
-  | { kind: 'export' }
   | { kind: 'risks' }
   | { kind: 'timeline' }
 
@@ -145,7 +144,7 @@ function StageDots({ summary, t }: { summary: ProjectSummary; t: Translate }): J
       {STAGES.map((stage, index) => {
         // Completion comes from the ledger's own gate record; the current
         // position only decides which dot is highlighted.
-        const done = summary.gateComplete[index] === true
+        const done = summary.stageDone[index] === true
         const current = !summary.closed && index === currentIndex
         return (
           <span key={stage} className="stage-dot" data-done={done} data-current={current}
@@ -164,7 +163,7 @@ function StageTrack({ summary, t, compact = false }: { summary: ProjectSummary; 
       {STAGES.map((stage, index) => {
         // The rail reports the ledger's gate records, not an inferred
         // "everything before the current stage must be done".
-        const done = summary.gateComplete[index] === true
+        const done = summary.stageDone[index] === true
         const current = !summary.closed && index === currentIndex
         return (
           <div key={stage} className="stage-step" role="listitem" data-done={done} data-current={current} data-reached={done || current}
@@ -182,46 +181,60 @@ function StageTrack({ summary, t, compact = false }: { summary: ProjectSummary; 
   )
 }
 
-/** The four headline counters. */
+/**
+ * The four v3 headline counters.
+ *
+ * They are the numbers the spec's acceptance list checks: total projects,
+ * G0 passed, in progress, and the summed amount. The amount is formatted with
+ * thousands separators because six figures of 万元 is unreadable otherwise.
+ */
 function StatGrid({ snapshot, t }: { snapshot: Snapshot; t: Translate }): JSX.Element {
   const stats = snapshot.stats
   return (
     <div className="stat-grid">
       <div className="stat-card" data-tone="blue">
-        <div className="stat-label">{t('statActive')}</div>
-        <div className="stat-value">{stats.active}</div>
-        <div className="stat-note">{t('statTotal')} {stats.total}</div>
-      </div>
-      <div className="stat-card" data-tone="amber">
-        <div className="stat-label">{t('statG0')}</div>
-        <div className="stat-value" data-tone="amber">{stats.g0Incomplete}</div>
-        <div className="stat-note">G0</div>
-      </div>
-      <div className="stat-card" data-tone="red">
-        <div className="stat-label">{t('statRisk')}</div>
-        <div className="stat-value" data-tone="red">{stats.atRisk}</div>
-        <div className="stat-note">{t('statClosed')} {stats.closed}</div>
+        <div className="stat-label">{t('statTotalProjects')}</div>
+        <div className="stat-value">{stats.total}</div>
+        <div className="stat-note">{t('statTotalNote')}</div>
       </div>
       <div className="stat-card" data-tone="green">
-        <div className="stat-label">{t('statConvertible')}</div>
-        <div className="stat-value" data-tone="green">{stats.convertible}</div>
-        <div className="stat-note">{t('dimAchievement')} + {t('dimEvidence')} + {t('dimRecognition')}</div>
+        <div className="stat-label">{t('statG0Passed')}</div>
+        <div className="stat-value" data-tone="green">{stats.g0Passed}</div>
+        <div className="stat-note">{t('statG0CompleteNote')} {stats.g0Complete}</div>
+      </div>
+      <div className="stat-card" data-tone="blue">
+        <div className="stat-label">{t('statInProgress')}</div>
+        <div className="stat-value">{stats.inProgress}</div>
+        <div className="stat-note">{t('statStoppedNote')} {stats.stopped}</div>
+      </div>
+      <div className="stat-card" data-tone="amber">
+        <div className="stat-label">{t('statAmount')}</div>
+        <div className="stat-value" data-tone="amber">{formatWan(stats.amountTotalWan)}</div>
+        <div className="stat-note">{t('statAmountUnit')}</div>
       </div>
     </div>
   )
 }
 
-/** The project table: name, stage, four dimensions, gap count, action. */
-function ProjectTable({ snapshot, t, onOpen }: { snapshot: Snapshot; t: Translate; onOpen(pocId: string): void }): JSX.Element {
+/** Format 万元 with thousands separators. */
+function formatWan(value: number): string {
+  const rounded = Math.round(value * 10) / 10
+  return rounded.toLocaleString('zh-CN', { maximumFractionDigits: 1 })
+}
+
+/** The project table: project, org, stage, amount, latest progress, gaps, action. */
+function ProjectTable({ snapshot, t, locale, onOpen }: { snapshot: Snapshot; t: Translate; locale: string; onOpen(pocId: string): void }): JSX.Element {
   return (
     <table className="project-table">
       <thead className="table-head">
         <tr>
-          <th style={{ width: '30%' }}>{t('colProject')}</th>
+          <th style={{ width: '22%' }}>{t('colProject')}</th>
+          <th style={{ width: '14%' }}>{t('colOrg')}</th>
           <th style={{ width: '13%' }}>{t('colStage')}</th>
-          <th style={{ width: '37%' }}>{t('colDimensions')}</th>
-          <th style={{ width: '10%' }}>{t('colGaps')}</th>
-          <th style={{ width: '10%' }}>{t('colAction')}</th>
+          <th style={{ width: '9%' }}>{t('colAmount')}</th>
+          <th style={{ width: '24%' }}>{t('colLatestProgress')}</th>
+          <th style={{ width: '6%' }}>{t('colGaps')}</th>
+          <th style={{ width: '12%' }}>{t('colAction')}</th>
         </tr>
       </thead>
       <tbody>
@@ -245,6 +258,10 @@ function ProjectTable({ snapshot, t, onOpen }: { snapshot: Snapshot; t: Translat
                 <span className="project-id">{project.pocId}{project.owner === '' ? '' : ` · ${project.owner}`}</span>
               </td>
               <td>
+                <span className="project-org">{project.system === '' ? t('emptyField') : project.system}</span>
+                <span className="project-id">{project.company === '' ? t('emptyField') : project.company}</span>
+              </td>
+              <td>
                 <div className="stage-cell">
                   <span className={`status-pill tone-${stageTone(project.stage, project.closed)}`}>
                     <span className="status-dot" />
@@ -254,13 +271,27 @@ function ProjectTable({ snapshot, t, onOpen }: { snapshot: Snapshot; t: Translat
                 </div>
               </td>
               <td>
-                <DimensionCells summary={project} t={t} />
+                <span className="amount-cell">{project.amountWan === 0 ? '—' : formatWan(project.amountWan)}</span>
               </td>
               <td>
-                <span className="gap-count" data-level={level}>
-                  {project.gapCount === 0 ? '—' : project.gapCount}
-                </span>
-                {project.highGapCount > 0 ? <span className="project-meta"> · {project.highGapCount}!</span> : null}
+                {project.progressCount === 0 ? (
+                  <span className="project-meta is-muted">{t('noProgressYet')}</span>
+                ) : (
+                  <>
+                    <span className="progress-summary">{project.lastProgressSummary === '' ? t('emptyField') : project.lastProgressSummary}</span>
+                    <span className="project-id">
+                      {formatStamp(project.lastProgressDate ?? '', locale)} · {format(t('progressCount'), { count: project.progressCount })}
+                    </span>
+                  </>
+                )}
+              </td>
+              <td>
+                <div className="gap-cell">
+                  <span className="gap-count" data-level={level}>
+                    {project.gapCount === 0 ? '—' : project.gapCount}
+                  </span>
+                  {project.highGapCount > 0 ? <span className="project-meta">{project.highGapCount}!</span> : null}
+                </div>
               </td>
               <td>
                 <div className="row-actions">
@@ -295,7 +326,7 @@ function PendingList({ gaps, t, onOpen }: { gaps: GapItem[]; t: Translate; onOpe
         <div key={`${item.pocId}:${item.rule}`} className={`gap-item gap-level-${item.level}`}>
           <span className="gap-flag" aria-hidden="true" />
           <div className="gap-text">
-            <div className="gap-title">{t(`gap.${item.rule}.title`)}</div>
+            <div className="gap-title">{format(t(`gap.${item.rule}.title`), { ...(item.params ?? {}) })}</div>
             <div className="gap-copy">
               {format(t(`gap.${item.rule}.copy`), {
                 ...(item.params ?? {}),
@@ -450,7 +481,7 @@ function errorText(t: Translate, error: unknown): string {
 }
 
 /** The overview page: stats, table, pending rail. */
-function OverviewPage({ snapshot, t, onOpen }: { snapshot: Snapshot; t: Translate; onOpen(pocId: string): void }): JSX.Element {
+function OverviewPage({ snapshot, t, locale, onOpen }: { snapshot: Snapshot; t: Translate; locale: string; onOpen(pocId: string): void }): JSX.Element {
   return (
     <>
       <StatGrid snapshot={snapshot} t={t} />
@@ -464,7 +495,7 @@ function OverviewPage({ snapshot, t, onOpen }: { snapshot: Snapshot; t: Translat
             <div className="panel-body">
               {snapshot.projects.length === 0
                 ? <div className="panel-body padded">{t('noProjects')}</div>
-                : <ProjectTable snapshot={snapshot} t={t} onOpen={onOpen} />}
+                : <ProjectTable snapshot={snapshot} t={t} locale={locale} onOpen={onOpen} />}
             </div>
           </div>
           {snapshot.warnings.length > 0 ? (
@@ -507,25 +538,114 @@ function DetailRow({ label, value, t }: { label: string; value: string; t: Trans
   )
 }
 
-/** The detail page: hero, stage track, four dimensions, then the full record. */
+/** Map a v3 recognition value onto a pill tone. */
+function recognitionTone(value: string): string {
+  if (value === '认可') return 'green'
+  if (value === '部分认可') return 'amber'
+  if (value === '未认可') return 'red'
+  return 'slate'
+}
+
+/** One progress entry: the v3 core, rendered as a timeline node. */
+function ProgressItem({ entry, t, locale }: { entry: ProgressView; t: Translate; locale: string }): JSX.Element {
+  return (
+    <div className="timeline-item">
+      <div className="timeline-marker" aria-hidden="true" />
+      <div className="timeline-content">
+        <div className="timeline-heading">
+          <span className="timeline-date">{entry.date === '' ? '—' : formatStamp(entry.date, locale)}</span>
+          <span className="timeline-meta">
+            {entry.type === '' ? t('progressTypeUnset') : entry.type}
+            {entry.seq === null ? '' : ` · #${entry.seq}`}
+            {entry.completion === '' ? '' : ` · ${entry.completion}`}
+          </span>
+        </div>
+        {entry.goal === '' ? null : (
+          <div className="timeline-copy"><span>{t('progressGoal')}：{entry.goal}</span></div>
+        )}
+        {entry.items.length === 0 ? null : (
+          <div className="timeline-copy">
+            <span>{t('progressItems')}：{entry.items.join(' · ')}</span>
+          </div>
+        )}
+        {entry.actual === '' ? null : (
+          <div className="timeline-copy"><span>{t('progressActual')}：{entry.actual}</span></div>
+        )}
+        <div className="timeline-tags">
+          {entry.evidence.length === 0 ? (
+            <span className="timeline-missing">{t('timelineNoEvidence')}</span>
+          ) : (
+            entry.evidence.map((item, index) => (
+              <span key={`${item.title}:${index}`} className="chip" title={item.link}>
+                {item.type === '' ? '' : `${item.type} · `}
+                {item.title === '' ? t('emptyField') : item.title}
+              </span>
+            ))
+          )}
+        </div>
+        <div className="timeline-tags">
+          {entry.customer.syncedWith === '' ? null : (
+            <span className="chip">{t('progressSyncedWith')}：{entry.customer.syncedWith}</span>
+          )}
+          {entry.customer.recognition === '' ? null : (
+            <span className={`status-pill tone-${recognitionTone(entry.customer.recognition)}`}>
+              <span className="status-dot" />
+              {entry.customer.recognition}
+            </span>
+          )}
+          {entry.gate3_1 === '' ? null : <span className="chip">{t('gate3_1Label')}：{entry.gate3_1}</span>}
+          {entry.gate3_2 === '' ? null : <span className="chip">{t('gate3_2Label')}：{entry.gate3_2}</span>}
+        </div>
+        {entry.customer.feedback === '' ? null : (
+          <div className="timeline-copy"><span>{t('feedbackLabel')}：{entry.customer.feedback}</span></div>
+        )}
+        {entry.next.goal === '' && entry.next.owner === '' && entry.next.deadline === '' ? null : (
+          <div className="timeline-copy">
+            <span>
+              {t('progressNext')}：{entry.next.goal === '' ? t('emptyField') : entry.next.goal}
+              {entry.next.owner === '' ? '' : ` · ${entry.next.owner}`}
+              {entry.next.deadline === '' ? '' : ` · ${t('progressDeadline')} ${entry.next.deadline}`}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** The detail page: hero, stage track, the progress stream, then the full record. */
 function DetailPage({ detail, t, locale, onBack }: { detail: ProjectDetail; t: Translate; locale: string; onBack(): void }): JSX.Element {
   const summary = detail.summary
+  const outcome = detail.outcome
+  // The four dimensions come from `outcome`; v3 derives most of them from the
+  // newest progress entry, so the note says which side supplied the value.
   const resultPresent: Record<DimensionKey, boolean> = {
-    achievement: detail.result.achievement !== '',
-    evidence: detail.result.evidence !== '',
-    recognition: detail.result.recognition !== '',
-    nextMilestone: detail.result.next_milestone !== '',
+    achievement: outcome.achievement !== '',
+    evidence: outcome.ourProof !== '' || detail.progress.some((entry) => entry.evidence.length > 0),
+    recognition: outcome.customerRecognition !== '',
+    nextMilestone: outcome.milestone !== '',
   }
   const resultValue: Record<DimensionKey, string> = {
-    achievement: detail.result.achievement,
-    evidence: detail.result.evidence,
-    recognition: detail.result.recognition,
-    nextMilestone: detail.result.next_milestone,
+    achievement: outcome.achievement,
+    evidence: outcome.ourProof,
+    recognition: outcome.customerRecognition,
+    nextMilestone: outcome.milestone,
+  }
+  // Which dimensions are auto-derived by the ledger rather than hand-filled.
+  const derived: Record<DimensionKey, boolean> = {
+    achievement: true,
+    evidence: false,
+    recognition: true,
+    nextMilestone: false,
   }
   const identity = format(t('detailIdentity'), {
     pocId: summary.pocId,
     stage: summary.stageLabel === '' ? t('stageUnknown') : summary.stageLabel,
-    tier: detail.tier === '' ? '—' : detail.tier,
+    org: `${summary.system === '' ? t('emptyField') : summary.system} · ${summary.company === '' ? t('emptyField') : summary.company}`,
+  })
+  const progress = [...detail.progress].sort((left, right) => {
+    if (left.date !== right.date) return right.date.localeCompare(left.date)
+    return (right.seq ?? 0) - (left.seq ?? 0)
   })
   return (
     <>
@@ -534,6 +654,13 @@ function DetailPage({ detail, t, locale, onBack }: { detail: ProjectDetail; t: T
           <div className="project-hero-text">
             <h1 className="project-title">{summary.name}</h1>
             <p className="project-identity">{identity}</p>
+            <p className="project-identity">
+              <span>{t('colAmount')}：{formatWan(summary.amountWan)} {t('statAmountUnit')}</span>
+              <span>·</span>
+              <span>{summary.pocType === '' ? t('emptyField') : summary.pocType}</span>
+              <span>·</span>
+              <span>{summary.status === '' ? t('emptyField') : summary.status}</span>
+            </p>
           </div>
           <div className="project-hero-actions">
             <button type="button" className="btn" onClick={onBack}>{t('back')}</button>
@@ -546,11 +673,36 @@ function DetailPage({ detail, t, locale, onBack }: { detail: ProjectDetail; t: T
       </div>
       <div className="detail-body">
         <div className="detail-section">
-          <h2 className="section-heading">{t('sectionFourDim')}<span className="section-kicker">{format(t('dimensionCount'), { count: summary.dimensionCount })}</span></h2>
+          <h2 className="section-heading">
+            {t('sectionProgress')}
+            <span className="section-kicker">{format(t('progressCount'), { count: detail.progress.length })}</span>
+          </h2>
+          {progress.length === 0 ? (
+            <div className="empty-state" style={{ padding: '28px 24px' }}>
+              <h3 className="empty-title">{t('progressEmptyTitle')}</h3>
+              <p className="empty-copy">{t('progressEmptyCopy')}</p>
+            </div>
+          ) : (
+            <div className="timeline">
+              {progress.map((entry, index) => (
+                <ProgressItem key={`${entry.date}:${entry.seq ?? index}`} entry={entry} t={t} locale={locale} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="detail-section">
+          <h2 className="section-heading">
+            {t('sectionFourDim')}
+            <span className="section-kicker">{format(t('dimensionCount'), { count: summary.dimensionCount })}</span>
+          </h2>
           <div className="status-summary">
             {DIMENSIONS.map((key) => (
               <div key={key} className="summary-item" data-present={resultPresent[key]}>
-                <span className="summary-label">{t(DIMENSION_LABELS[key])}</span>
+                <span className="summary-label">
+                  {t(DIMENSION_LABELS[key])}
+                  <span className="summary-origin">{derived[key] ? t('dimAuto') : t('dimManual')}</span>
+                </span>
                 <span className="summary-value">{resultPresent[key] ? `✓ ${t('dimPresent')}` : `✗ ${t('dimMissing')}`}</span>
                 <span className="summary-note">{resultPresent[key] ? resultValue[key] : t('emptyField')}</span>
               </div>
@@ -566,7 +718,7 @@ function DetailPage({ detail, t, locale, onBack }: { detail: ProjectDetail; t: T
                 <div key={item.rule} className={`gap-item gap-level-${item.level}`}>
                   <span className="gap-flag" aria-hidden="true" />
                   <div className="gap-text">
-                    <div className="gap-title">{t(`gap.${item.rule}.title`)}</div>
+                    <div className="gap-title">{item.ruleNo}. {format(t(`gap.${item.rule}.title`), { ...(item.params ?? {}) })}</div>
                     <div className="gap-copy">{format(t(`gap.${item.rule}.copy`), { ...(item.params ?? {}) })}</div>
                   </div>
                 </div>
@@ -576,58 +728,49 @@ function DetailPage({ detail, t, locale, onBack }: { detail: ProjectDetail; t: T
         ) : null}
 
         <div className="detail-section">
-          <h2 className="section-heading">{t('sectionG0')}</h2>
+          <h2 className="section-heading">{t('sectionG0')}<span className="section-kicker">{detail.gate0.complete ? t('g0Complete') : format(t('g0Missing'), { count: detail.gate0.missing.length })}</span></h2>
           <div className="detail-list">
-            <DetailRow label={t('whyCustomerTest')} value={detail.whyCustomerTest} t={t} />
-            <DetailRow label={t('whyWeTest')} value={detail.whyWeTest} t={t} />
-            <DetailRow label={t('customerTechOwner')} value={detail.customerTechOwner} t={t} />
-            <DetailRow label={t('nextActionGoal')} value={detail.nextActionGoal} t={t} />
-            <DetailRow label={t('owner')} value={detail.owner} t={t} />
-            <DetailRow label={t('salesInitiator')} value={detail.salesInitiator} t={t} />
-            <DetailRow label={t('type')} value={detail.type} t={t} />
-            <DetailRow label={t('tier')} value={detail.tier} t={t} />
+            <DetailRow label={t('whyCustomerTest')} value={detail.gate0.whyCustomer} t={t} />
+            <DetailRow label={t('whyWeTest')} value={detail.gate0.whyUs} t={t} />
+            <DetailRow label={t('decisionChain')} value={detail.gate0.decisionChain} t={t} />
+            <DetailRow label={t('postPocDecision')} value={detail.gate0.postPocDecision} t={t} />
+            <DetailRow label={t('competitor')} value={detail.gate0.competitor} t={t} />
+            <DetailRow label={t('customerTechOwner')} value={summary.techOwner} t={t} />
+            <DetailRow label={t('g0Conclusion')} value={detail.gate0.conclusion} t={t} />
+            <DetailRow label={t('g0Reviewer')} value={detail.gate0.reviewer} t={t} />
+            <DetailRow label={t('g0ReviewedAt')} value={detail.gate0.reviewedAt} t={t} />
           </div>
         </div>
 
         <div className="detail-section">
-          <h2 className="section-heading">{t('sectionGates')}</h2>
+          <h2 className="section-heading">{t('sectionIdentity')}</h2>
           <div className="detail-list">
-            {detail.gates.map((gate) => (
-              <div key={gate.stage} className="gate-row">
-                <span className="gate-stage">{gate.stage}</span>
-                <span className={`status-pill tone-${gate.complete ? 'green' : 'slate'}`}>
-                  <span className="status-dot" />
-                  {gate.complete ? t('stageDone') : t('stagePending')}
-                </span>
-                <span className="gate-copy">
-                  {gate.date === null ? '' : `${t('gateDate')} ${formatStamp(gate.date, locale)} · `}
-                  {gate.indicators === null && gate.scenarios === null && gate.risks === null
-                    ? ''
-                    : format(t('gateCounts'), {
-                        indicators: gate.indicators ?? '—',
-                        scenarios: gate.scenarios ?? '—',
-                        risks: gate.risks ?? '—',
-                      })}
-                  {gate.prerequisitesReady === null ? '' : ` · ${format(t('gatePrereq'), { ready: gate.prerequisitesReady ? t('yes') : t('no') })}`}
-                  {gate.engineersInvested === null ? '' : ` · ${format(t('gateEngineers'), { invested: gate.engineersInvested ? t('yes') : t('no') })}`}
-                </span>
-              </div>
-            ))}
+            <DetailRow label={t('owner')} value={summary.owner} t={t} />
+            <DetailRow label={t('salesInitiator')} value={detail.sales} t={t} />
+            <DetailRow label={t('execSponsor')} value={detail.execSponsor} t={t} />
+            <DetailRow label={t('type')} value={summary.pocType} t={t} />
+            <DetailRow label={t('colAmount')} value={summary.amountWan === 0 ? '' : `${formatWan(summary.amountWan)} ${t('statAmountUnit')}`} t={t} />
+            <DetailRow label={t('priority')} value={summary.priority} t={t} />
+            <DetailRow label={t('stageSince')} value={summary.stageSince === null ? '' : `${formatStamp(summary.stageSince, locale)}${summary.daysInStage === null ? '' : ` · ${format(t('daysInStage'), { days: summary.daysInStage })}`}`} t={t} />
           </div>
         </div>
 
         <div className="detail-section">
-          <h2 className="section-heading">{t('sectionScope')}</h2>
+          <h2 className="section-heading">{t('sectionPlan')}</h2>
           <div className="detail-list">
+            <DetailRow label={t('customerPain')} value={detail.plan.customerPain} t={t} />
+            <DetailRow label={t('expectedRecognition')} value={detail.plan.expectedRecognition} t={t} />
+            <DetailRow label={t('ourEdge')} value={detail.plan.ourEdge} t={t} />
             <div className="detail-row">
               <span className="detail-label">{t('criteriaTitle')} · {t('criteriaLimitHint')}</span>
               <div className="detail-value">
-                {detail.criteria.length === 0 ? <span className="is-empty" style={{ fontStyle: 'italic', opacity: .7 }}>{t('emptyField')}</span> : (
+                {detail.plan.criteria.length === 0 ? <span className="is-empty" style={{ fontStyle: 'italic', opacity: .7 }}>{t('emptyField')}</span> : (
                   <div className="chip-row">
-                    {detail.criteria.map((criterion, index) => (
-                      <span key={`${criterion.name}:${index}`} className="chip" title={criterion.metric}>
+                    {detail.plan.criteria.map((criterion, index) => (
+                      <span key={`${criterion.name}:${index}`} className="chip" title={`${criterion.baseline} → ${criterion.target}`}>
                         {criterion.name === '' ? t('emptyField') : criterion.name}
                         {criterion.metric === '' ? '' : ` · ${criterion.metric}`}
+                        {criterion.target === '' ? '' : ` → ${criterion.target}`}
                       </span>
                     ))}
                   </div>
@@ -637,17 +780,17 @@ function DetailPage({ detail, t, locale, onBack }: { detail: ProjectDetail; t: T
             <div className="detail-row">
               <span className="detail-label">{t('scenariosTitle')} · {t('scenariosLimitHint')}</span>
               <div className="detail-value">
-                {detail.scenarios.length === 0 ? t('emptyField') : (
-                  <div className="chip-row">{detail.scenarios.map((scenario, index) => <span key={`${scenario}:${index}`} className="chip">{scenario}</span>)}</div>
+                {detail.plan.scenarios.length === 0 ? t('emptyField') : (
+                  <div className="chip-row">{detail.plan.scenarios.map((scenario, index) => <span key={`${scenario}:${index}`} className="chip">{scenario}</span>)}</div>
                 )}
               </div>
             </div>
             <div className="detail-row">
               <span className="detail-label">{t('risksTitle')} · {t('risksLimitHint')}</span>
               <div className="detail-value">
-                {detail.risks.length === 0 ? t('emptyField') : (
+                {detail.plan.risks.length === 0 ? t('emptyField') : (
                   <div className="chip-row">
-                    {detail.risks.map((risk, index) => (
+                    {detail.plan.risks.map((risk, index) => (
                       <span key={`${risk.name}:${index}`} className="chip" title={risk.mitigation}>
                         {risk.name === '' ? t('emptyField') : risk.name}
                         {risk.level === '' ? '' : ` · ${risk.level}`}
@@ -657,44 +800,29 @@ function DetailPage({ detail, t, locale, onBack }: { detail: ProjectDetail; t: T
                 )}
               </div>
             </div>
+            <DetailRow label={t('gate1Conclusion')} value={detail.plan.gate1Conclusion} t={t} />
+            <DetailRow label={t('gate2Ready')} value={detail.plan.gate2Ready} t={t} />
+            <DetailRow label={t('timelineWindow')} value={detail.plan.timelineStart === '' && detail.plan.timelineEnd === '' ? '' : `${detail.plan.timelineStart === '' ? '—' : detail.plan.timelineStart} → ${detail.plan.timelineEnd === '' ? '—' : detail.plan.timelineEnd}`} t={t} />
           </div>
         </div>
 
         <div className="detail-section">
-          <h2 className="section-heading">{t('sectionTimeline')}<span className="section-kicker">{detail.timeline.length}</span></h2>
-          {detail.timeline.length === 0 ? (
-            <p className="gap-copy" style={{ margin: 0 }}>{t('noTimeline')}</p>
-          ) : (
-            <div className="timeline">
-              {detail.timeline.map((round, index) => (
-                <div key={`${round.date}:${index}`} className="timeline-item">
-                  <div className="timeline-marker" aria-hidden="true" />
-                  <div className="timeline-content">
-                    <div className="timeline-heading">
-                      <span className="timeline-date">{round.date === '' ? '—' : formatStamp(round.date, locale)}</span>
-                      <span className="timeline-meta">
-                        {round.round === null ? t('roundUnnumbered') : format(t('round'), { round: round.round })}
-                        {round.goal === '' ? '' : ` · ${round.goal}`}
-                      </span>
-                    </div>
-                    <div className="timeline-copy">
-                      {round.actual === '' ? null : <span>{round.actual}</span>}
-                      {round.evidence === '' ? null : <span>{t('evidenceLabel')}：{round.evidence}</span>}
-                      {round.customer_feedback === '' ? null : <span>{t('feedbackLabel')}：{round.customer_feedback}</span>}
-                    </div>
-                    {round.recognition_scope === '' ? null : (
-                      <div className="timeline-tags">
-                        <span className={`status-pill tone-${round.recognition_scope === '无' ? 'slate' : 'green'}`}>
-                          <span className="status-dot" />
-                          {t('recognitionLabel')}：{round.recognition_scope}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <h2 className="section-heading">{t('sectionOutcome')}</h2>
+          <div className="detail-list">
+            <DetailRow label={t('outcomeAchievement')} value={outcome.achievement} t={t} />
+            <DetailRow label={t('outcomeRecognition')} value={outcome.customerRecognition} t={t} />
+            <DetailRow label={t('outcomeOurProof')} value={outcome.ourProof} t={t} />
+            <DetailRow label={t('outcomeRemainingRisks')} value={outcome.remainingRisks} t={t} />
+            <DetailRow label={t('outcomeProved')} value={outcome.proved} t={t} />
+            <DetailRow label={t('outcomeRecognized')} value={outcome.recognized} t={t} />
+            <DetailRow label={t('outcomeNextBusiness')} value={outcome.nextBusiness} t={t} />
+            <DetailRow label={t('outcomeMilestone')} value={outcome.milestone} t={t} />
+            <DetailRow label={t('outcomeBusinessOwner')} value={outcome.businessOwner} t={t} />
+            <DetailRow label={t('outcomeBusinessDeadline')} value={outcome.businessDeadline} t={t} />
+            <DetailRow label={t('outcomeBusinessStatus')} value={outcome.businessStatus} t={t} />
+            <DetailRow label={t('outcomeOverall')} value={outcome.overall} t={t} />
+            <DetailRow label={t('outcomeReviewedAt')} value={outcome.reviewedAt} t={t} />
+          </div>
         </div>
       </div>
     </>
@@ -850,9 +978,6 @@ export function WorkDashboardPage({ api, locale, t }: WorkDashboardPageProps): J
                 <button type="button" className="btn btn-primary" disabled={busy} onClick={() => { void refresh(true) }}>
                   {busy ? <><span className="spinner" /> {t('refreshing')}</> : t('refresh')}
                 </button>
-                <button type="button" className="btn" onClick={() => setPage({ kind: 'export' })} disabled={snapshot === null || !snapshot.cacheReady}>
-                  {t('exportNav')}
-                </button>
                 <button type="button" className="btn" onClick={() => setPage({ kind: 'risks' })} disabled={snapshot === null || !snapshot.cacheReady}>
                   {t('risksNav')}
                 </button>
@@ -867,15 +992,13 @@ export function WorkDashboardPage({ api, locale, t }: WorkDashboardPageProps): J
             </>
           ) : null}
 
-          {page.kind === 'export' ? (
-            <ExportPage api={api} t={t} snapshot={snapshot} onBack={backToOverview} />
-          ) : page.kind === 'risks' ? (
+          {page.kind === 'risks' ? (
             <RiskBoardPage api={api} t={t} onBack={backToOverview} onOpenProject={(pocId) => { void openDetail(pocId) }} />
           ) : page.kind === 'timeline' ? (
             <TimelinePage api={api} t={t} locale={activeLocale} onBack={backToOverview} onOpenProject={(pocId) => { void openDetail(pocId) }} />
           ) : null}
 
-          {page.kind === 'export' || page.kind === 'risks' || page.kind === 'timeline' ? null : (
+          {page.kind === 'risks' || page.kind === 'timeline' ? null : (
           <div className={page.kind === 'overview' ? 'page-body' : 'detail-body'}>
             {failure !== null ? (
               <div style={{ marginBottom: 16 }}>
@@ -901,6 +1024,7 @@ export function WorkDashboardPage({ api, locale, t }: WorkDashboardPageProps): J
               <OverviewPage
                 snapshot={snapshot}
                 t={t}
+                locale={activeLocale}
                 onOpen={(pocId) => { void openDetail(pocId) }}
               />
             )}

@@ -8,7 +8,7 @@
  * boundary — only lossless JSON.
  */
 import type { ClientConnectionLike } from './contracts.js';
-import type { ExportOutcome, GlobalTimeline, ProjectDetail, RefreshOutcome, RiskBoard, Snapshot } from '../types.js';
+import type { GlobalTimeline, ProjectDetail, RefreshOutcome, RiskBoard, Snapshot } from '../types.js';
 /** Failure raised by the Host; `code` is stable enough to switch on. */
 export declare class ActionError extends Error {
     readonly code: string;
@@ -26,11 +26,6 @@ export interface ClientApi {
     }>;
     /** One project's detail page. */
     detail(pocId: string, signal?: AbortSignal): Promise<ProjectDetail>;
-    /** Generate the self-contained HTML form. */
-    exportForm(input: {
-        pocIds: string[];
-        mode: 'fill' | 'blank';
-    }, signal?: AbortSignal): Promise<ExportOutcome>;
     /** Risks across all projects, sorted by severity. */
     risks(signal?: AbortSignal): Promise<RiskBoard>;
     /** Rounds across all projects, newest first. */

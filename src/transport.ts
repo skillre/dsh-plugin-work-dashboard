@@ -14,7 +14,7 @@
 
 import { z } from 'zod'
 import { RepoError } from './repo.js'
-import type { ExportOutcome, GlobalTimeline, PocRequest, ProjectDetail, RefreshOutcome, RiskBoard, Snapshot } from './types.js'
+import type { GlobalTimeline, PocRequest, ProjectDetail, RefreshOutcome, RiskBoard, Snapshot } from './types.js'
 import { ENDPOINT } from './types.js'
 
 /** Path of the exact route, under the shared `/api` channel. */
@@ -41,8 +41,6 @@ export interface ConsoleActions {
   refresh(): Promise<{ snapshot: Snapshot; outcome: RefreshOutcome }>
   /** One project's detail, or `null` when the id is unknown. */
   detail(pocId: string): Promise<ProjectDetail | null>
-  /** Generate the self-contained HTML form for the selected projects. */
-  exportForm(input: { pocIds: string[]; mode: 'fill' | 'blank' }): Promise<ExportOutcome>
   /** Every project's risks, sorted by severity. */
   risks(): Promise<RiskBoard>
   /** Every project's rounds, newest first. */
@@ -64,7 +62,6 @@ const requestSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('list') }).strict(),
   z.object({ action: z.literal('refresh') }).strict(),
   z.object({ action: z.literal('detail'), pocId: pocIdSchema }).strict(),
-  z.object({ action: z.literal('export'), pocIds: z.array(pocIdSchema).max(500), mode: z.enum(['fill', 'blank']) }).strict(),
   z.object({ action: z.literal('risks') }).strict(),
   z.object({ action: z.literal('timeline') }).strict(),
 ])
@@ -105,8 +102,6 @@ async function dispatch(actions: ConsoleActions, request: PocRequest, signal: Ab
       if (detail === null) throw new RepoError('unknown-project', `No project with poc_id ${JSON.stringify(request.pocId)}.`, { pocId: request.pocId })
       return detail
     }
-    case 'export':
-      return actions.exportForm({ pocIds: request.pocIds, mode: request.mode })
     case 'risks':
       return actions.risks()
     case 'timeline':

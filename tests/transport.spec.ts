@@ -18,7 +18,7 @@ const SNAPSHOT: Snapshot = {
   fetchedAt: null,
   cachePath: '/tmp/poc/repo',
   projects: [],
-  stats: { active: 0, g0Incomplete: 0, atRisk: 0, convertible: 0, total: 0, closed: 0 },
+  stats: { total: 0, g0Passed: 0, inProgress: 0, amountTotalWan: 0, g0Complete: 0, awaitingCustomer: 0, succeeded: 0, stopped: 0 },
   gaps: [],
   warnings: [],
 }

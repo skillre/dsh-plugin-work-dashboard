@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { ExportOutcome, GlobalTimeline, RiskBoard, Snapshot } from '../types.js'
+import type { GlobalTimeline, RiskBoard, Snapshot } from '../types.js'
 import { ActionError } from './api.js'
 import type { ClientApi } from './api.js'
 import { format, type Translate } from './text.js'
@@ -41,148 +41,20 @@ function downloadHtml(fileName: string, html: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-/** The export page: pick projects, generate one self-contained form. */
-export function ExportPage({
-  api,
-  t,
-  snapshot,
-  onBack,
-}: {
-  api: ClientApi
-  t: Translate
-  snapshot: Snapshot | null
-  onBack(): void
-}): JSX.Element {
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [busy, setBusy] = useState(false)
-  const [failure, setFailure] = useState<string | null>(null)
-  const [done, setDone] = useState<ExportOutcome | null>(null)
-
-  const projects = snapshot?.projects ?? []
-  const blank = selected.size === 0
-
-  const toggle = useCallback((pocId: string) => {
-    setSelected((current) => {
-      const next = new Set(current)
-      if (next.has(pocId)) next.delete(pocId)
-      else next.add(pocId)
-      return next
-    })
-  }, [])
-
-  const selectAll = useCallback(() => setSelected(new Set(projects.map((project) => project.pocId))), [projects])
-  const selectNone = useCallback(() => setSelected(new Set()), [])
-
-  const generate = useCallback(async () => {
-    setBusy(true)
-    setFailure(null)
-    try {
-      const outcome = await api.exportForm({
-        pocIds: [...selected],
-        mode: selected.size === 0 ? 'blank' : 'fill',
-      })
-      downloadHtml(outcome.fileName, outcome.html)
-      setDone(outcome)
-    } catch (error) {
-      setFailure(errorText(t, error))
-    } finally {
-      setBusy(false)
-    }
-  }, [api, selected, t])
-
-  return (
-    <>
-      <div className="page-header">
-        <div className="page-header-text">
-          <h1 className="page-title">{t('exportTitle')}</h1>
-          <p className="page-subtitle">{t('exportSubtitle')}</p>
-        </div>
-        <div className="header-actions">
-          <button type="button" className="btn" onClick={onBack}>{t('back')}</button>
-        </div>
-      </div>
-      <div className="page-body">
-        {failure !== null ? (
-          <div className="failure" role="alert" style={{ marginBottom: 16 }}>
-            <div className="failure-text">
-              <div className="failure-title">⚠ {t('exportFailed')}</div>
-              <div className="failure-reason">{t('failureReason')}：{failure}</div>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="panel">
-          <div className="panel-header">
-            <h2 className="panel-title">{t('tableTitle')}</h2>
-            <span className="panel-kicker">{format(t('exportSelected'), { count: selected.size })}</span>
-          </div>
-          <div className="panel-body">
-            {projects.length === 0 ? (
-              <div className="padded gap-copy" style={{ padding: '12px 16px', margin: 0 }}>{t('exportNoProjects')}</div>
-            ) : (
-              <>
-                <div className="export-toolbar">
-                  <button type="button" className="btn btn-small" onClick={selectAll}>{t('exportSelectAll')}</button>
-                  <button type="button" className="btn btn-small" onClick={selectNone}>{t('exportSelectNone')}</button>
-                </div>
-                <div className="export-list">
-                  {projects.map((project) => (
-                    <label key={project.pocId} className="export-row" data-selected={selected.has(project.pocId)}>
-                      <input
-                        type="checkbox"
-                        checked={selected.has(project.pocId)}
-                        onChange={() => toggle(project.pocId)}
-                        aria-label={project.name}
-                      />
-                      <span className="export-name">{project.name}</span>
-                      <span className="project-id">{project.pocId}</span>
-                      <span className="export-stage">{project.stageLabel === '' ? t('stageUnknown') : project.stageLabel}</span>
-                    </label>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-          <div className="panel-footer submit-bar">
-            <div className="submit-hint">
-              {blank ? t('exportBlankHint') : t('exportHint')}
-            </div>
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={busy || (projects.length === 0 && !blank)}
-              onClick={() => { void generate() }}
-            >
-              {busy ? <><span className="spinner" /> {t('exportGenerating')}</> : t('exportGenerate')}
-            </button>
-          </div>
-        </div>
-
-        {done !== null ? (
-          <div className="panel" style={{ marginTop: 16 }}>
-            <div className="panel-header">
-              <h2 className="panel-title">✓ {t('exportDone', { name: done.fileName })}</h2>
-              <span className="panel-kicker">{format(t('exportSize'), { kb: Math.round(done.bytes / 1024) })}</span>
-            </div>
-            <div className="panel-body padded">
-              <p className="gap-copy" style={{ margin: 0 }}>{t('exportHint')}</p>
-              <p className="gap-copy" style={{ margin: '6px 0 0' }}>
-                {done.pocIds.length === 0 ? t('exportBlank') : done.pocIds.join(' · ')}
-              </p>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </>
-  )
-}
-
-/** One severity pill. */
+/** A severity pill: the one place a risk level becomes colour. */
 function LevelPill({ level, t }: { level: string; t: Translate }): JSX.Element {
   if (level === 'high') return <span className="status-pill tone-red"><span className="status-dot" />{t('riskHigh')}</span>
   if (level === 'medium') return <span className="status-pill tone-amber"><span className="status-dot" />{t('riskMedium')}</span>
   if (level === 'low') return <span className="status-pill tone-green"><span className="status-dot" />{t('riskLow')}</span>
   return <span className="status-pill tone-slate"><span className="status-dot" />{t('riskUnset')}</span>
+}
+
+/** Map a v3 recognition value onto a pill tone. */
+function recognitionTone(value: string): string {
+  if (value === '认可') return 'green'
+  if (value === '部分认可') return 'amber'
+  if (value === '未认可') return 'red'
+  return 'slate'
 }
 
 /** The risk board. */
@@ -409,7 +281,7 @@ export function TimelinePage({
                     <div className="timeline-heading">
                       <span className="timeline-date">{formatDate(entry.date)}</span>
                       <span className="timeline-meta">
-                        {entry.round === null ? t('roundUnnumbered') : format(t('timelineRoundShort'), { round: entry.round })}
+                        {entry.type === '' ? t('roundUnnumbered') : entry.type}
                       </span>
                       <button type="button" className="gap-link" onClick={() => onOpenProject(entry.pocId)}>
                         {entry.pocName} · {entry.pocId}
@@ -428,13 +300,22 @@ export function TimelinePage({
                       ) : (
                         <span>{t('feedbackLabel')}：{entry.customerFeedback}</span>
                       )}
+                      {entry.completion === '' ? null : <span>{t('completionLabel')}：{entry.completion}</span>}
                     </div>
-                    {entry.recognitionScope === '' ? null : (
+                    {entry.recognition === '' && entry.gate3_1 === '' && entry.gate3_2 === '' ? null : (
                       <div className="timeline-tags">
-                        <span className={`status-pill tone-${entry.recognitionScope === '无' ? 'slate' : 'green'}`}>
-                          <span className="status-dot" />
-                          {t('recognitionLabel')}：{entry.recognitionScope}
-                        </span>
+                        {entry.recognition === '' ? null : (
+                          <span className={`status-pill tone-${recognitionTone(entry.recognition)}`}>
+                            <span className="status-dot" />
+                            {t('recognitionLabel')}：{entry.recognition}
+                          </span>
+                        )}
+                        {entry.gate3_1 === '' ? null : (
+                          <span className="chip">{t('gate3_1Label')}：{entry.gate3_1}</span>
+                        )}
+                        {entry.gate3_2 === '' ? null : (
+                          <span className="chip">{t('gate3_2Label')}：{entry.gate3_2}</span>
+                        )}
                       </div>
                     )}
                   </div>

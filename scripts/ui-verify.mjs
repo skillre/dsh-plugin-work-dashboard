@@ -291,28 +291,24 @@ try {
     detail: `values=${board.statValues.join('/')}`,
   })
 
-  // 6. FOUR separate dimension cells per project, never merged.
-  record('four-dimension-cells-per-row', {
-    ok: board.dimCells === board.rows * 4,
-    detail: `${board.dimCells} cells across ${board.rows} rows`,
+  // 6. The v3 table carries the seven spec columns and a latest-progress cell.
+  const tableShape = await page.evaluate(`(() => ({
+    headers: [...document.querySelectorAll('.table-head th')].map((node) => node.textContent),
+    rows: document.querySelectorAll('.project-row').length,
+    progressCells: [...document.querySelectorAll('.progress-summary')].length,
+    amountCells: [...document.querySelectorAll('.amount-cell')].map((node) => node.textContent),
+  }))()`)
+  record('table-has-v3-columns', {
+    ok: tableShape.headers.join('|') === '项目|体系/公司|阶段|金额|最新进展|缺口|操作',
+    detail: tableShape.headers.join('|'),
   })
-  const dimensionDetail = await page.evaluate(`(() => {
-    const rows = [...document.querySelectorAll('.project-row')];
-    return rows.map((row) => ({
-      name: row.querySelector('.project-name')?.textContent ?? null,
-      labels: [...row.querySelectorAll('.dim-label')].map((node) => node.textContent),
-      marks: [...row.querySelectorAll('.dim-cell')].map((cell) => cell.getAttribute('data-present')),
-    }));
-  })()`)
-  record('four-dimension-cells-labelled', {
-    ok: dimensionDetail.length === 3 && dimensionDetail.every((row) => row.labels.join('|') === '目标达成|证据|客户认可|下一步'),
-    detail: dimensionDetail.map((row) => `${row.name}:${row.marks.join('')}`).join(' ; '),
+  record('table-shows-amount', {
+    ok: tableShape.amountCells.join(',') === '300,1,500,800',
+    detail: `amounts=${tableShape.amountCells.join(',')}`,
   })
-  // The G4 fixture is achieved + evidenced + recognised, but has no next milestone.
-  const g4 = dimensionDetail.find((row) => (row.name ?? '').includes('产线安全接入'))
-  record('four-dimension-state-is-per-dimension', {
-    ok: g4 !== undefined && g4.marks.join(',') === 'true,true,true,false',
-    detail: g4 === undefined ? 'G4 fixture missing' : `G4 marks=${g4.marks.join(',')}`,
+  record('table-shows-latest-progress', {
+    ok: tableShape.progressCells >= 1,
+    detail: `${tableShape.progressCells} progress cell(s)`,
   })
 
   // 7. The G0→G4 stage track is visible.
@@ -324,7 +320,7 @@ try {
     level: item.className,
   })))()`)
   record('pending-list-ordered', {
-    ok: pendingDetail.length > 0 && (pendingDetail[0]?.title ?? '').includes('做成了但没有下一步'),
+    ok: pendingDetail.length > 0 && (pendingDetail[0]?.title ?? '').includes('已达成但无下一步里程碑'),
     detail: pendingDetail.map((item) => item.title).join(' | '),
   })
   const boardShot = await page.shot('work-dashboard-board.png')
@@ -342,10 +338,10 @@ try {
     title: document.querySelector('.project-title')?.textContent ?? null,
     stageTrack: document.querySelectorAll('.stage-step').length,
     summaryItems: document.querySelectorAll('.summary-item').length,
-    summaryLabels: [...document.querySelectorAll('.summary-label')].map((node) => node.textContent),
+    summaryLabels: [...document.querySelectorAll('.summary-label')].map((node) => node.firstChild?.textContent ?? node.textContent),
     summaryMarks: [...document.querySelectorAll('.summary-item')].map((item) => item.getAttribute('data-present')),
     timelineItems: document.querySelectorAll('.timeline-item').length,
-    gateRows: document.querySelectorAll('.gate-row').length,
+    progressItems: document.querySelectorAll('.timeline-item').length,
     sections: [...document.querySelectorAll('.section-heading')].map((node) => node.firstChild?.textContent ?? node.textContent),
   }))()`)
   record('detail-page-opens', { ok: opened && detailState.hero, detail: `title=${detailState.title}` })
@@ -354,10 +350,9 @@ try {
     ok: detailState.summaryItems === 4 && detailState.summaryLabels.join('|') === '目标达成|证据|客户认可|下一步' && detailState.summaryMarks.join(',') === 'true,true,true,false',
     detail: `marks=${detailState.summaryMarks.join(',')}`,
   })
-  record('detail-timeline-rendered', { ok: detailState.timelineItems >= 2, detail: `${detailState.timelineItems} round(s)` })
-  record('detail-gate-rows', { ok: detailState.gateRows === 5, detail: `${detailState.gateRows} gate row(s)` })
+  record('detail-progress-stream', { ok: detailState.progressItems >= 2, detail: `${detailState.progressItems} progress item(s)` })
   record('detail-sections-present', {
-    ok: ['阶段轨道', '四维结果', 'G0 立项三必填', '时间线'].every((label) => detailState.sections.some((section) => (section ?? '').includes(label))),
+    ok: ['阶段轨道', '进展流', '四维结果', '身份', '计划（G1/G2）', '结论'].every((label) => detailState.sections.some((section) => (section ?? '').includes(label))),
     detail: detailState.sections.join(' | '),
   })
   const detailShot = await page.shot('work-dashboard-detail.png')
@@ -505,69 +500,7 @@ try {
   }
   await waitFor(async () => (await page.evaluate(`!!document.querySelector('.stat-grid')`)) === true, 'the overview never came back')
 
-  // ---- milestone 3: export form, risk board, timeline ---------------------
-
-  // 23. Export page: pick projects, generate a real file.
-  const exportEntry = await page.evaluate(HEADER_ACTION('导出表单'))
-  record('export-entry-present', { ok: exportEntry !== null, detail: 'header action' })
-  if (exportEntry !== null) {
-    await page.evaluate(`(() => {
-      const button = [...document.querySelectorAll('.header-actions button')].find((b) => (b.innerText || '').trim() === '导出表单');
-      button?.click();
-    })()`)
-    await waitFor(async () => (await page.evaluate(`!!document.querySelector('.export-list')`)) === true, 'the export page never mounted')
-    const exportPage = await page.evaluate(`(() => ({
-      rows: document.querySelectorAll('.export-row').length,
-      boxes: document.querySelectorAll('.export-row input[type="checkbox"]').length,
-      hint: document.querySelector('.submit-hint')?.textContent ?? null,
-    }))()`)
-    record('export-page-lists-projects', { ok: exportPage.rows === 3 && exportPage.boxes === 3, detail: `${exportPage.rows} rows` })
-    record('export-explains-blank-form', { ok: (exportPage.hint ?? '').includes('空白'), detail: (exportPage.hint ?? '').slice(0, 50) })
-
-    // Select two projects, then capture the generated download.
-    await page.evaluate(`(() => {
-      const boxes = [...document.querySelectorAll('.export-row input[type="checkbox"]')];
-      boxes[0]?.click(); boxes[1]?.click();
-      return true;
-    })()`)
-    await page.wait(400)
-    const selectedCount = await page.evaluate(`document.querySelectorAll('.export-row[data-selected="true"]').length`)
-    record('export-multi-select', { ok: selectedCount === 2, detail: `${selectedCount} selected` })
-
-    // Intercept the Blob download so the generated HTML can be inspected.
-    await page.evaluate(`(() => {
-      window.__pocDownloads = [];
-      const original = URL.createObjectURL;
-      URL.createObjectURL = function (blob) {
-        try { blob.text().then(function (text) { window.__pocDownloads.push(text); }); } catch (e) {}
-        return original.call(URL, blob);
-      };
-      return true;
-    })()`)
-    await clickNamed(page, '生成并下载')
-    let downloaded = null
-    for (let attempt = 0; attempt < 60; attempt += 1) {
-      const state = await page.evaluate(`(() => ({ files: (window.__pocDownloads || []).length, done: !!document.querySelector('.panel-body.padded') }))()`)
-      if (state.files > 0) { downloaded = state; break }
-      await page.wait(300)
-    }
-    const downloadedHtml = await page.evaluate(`(window.__pocDownloads && window.__pocDownloads[0]) || ''`)
-    record('export-generates-file', {
-      ok: downloaded !== null && downloadedHtml.startsWith('<!DOCTYPE html>'),
-      detail: downloaded === null ? 'no download captured' : `${Math.round(downloadedHtml.length / 1024)} KB`,
-    })
-    record('export-file-is-self-contained', {
-      ok: !/https?:\/\//.test(downloadedHtml) && !/<script[^>]+src=/.test(downloadedHtml) && !/<link\b/.test(downloadedHtml),
-    })
-    record('export-file-has-autosave-and-validation', {
-      ok: downloadedHtml.includes('localStorage') && downloadedHtml.includes('要求 2-3 个'),
-    })
-    const exportShot = await page.shot('work-dashboard-export.png')
-    await clickNamed(page, '← 返回')
-    await page.wait(700)
-  }
-
-  // 24. Risk board: rows sorted by severity.
+  // ---- milestone 3: risk board, timeline
   const riskEntry = await page.evaluate(HEADER_ACTION('风险看板'))
   record('risk-entry-present', { ok: riskEntry !== null, detail: 'header action' })
   if (riskEntry !== null) {
@@ -618,6 +551,16 @@ try {
   }
 
   const consoleErrors = await page.evaluate(`(() => window.__pocConsoleErrors ?? [])()`)
+  // A template placeholder that reached the DOM un-substituted is a rendering bug
+  // (v1 keys like {tier} survived into v3 copy).
+  const rawPlaceholders = await page.evaluate(`(() => {
+    const text = document.querySelector('.wd-shell')?.textContent ?? '';
+    return (text.match(/\\{[A-Za-z0-9_]+\\}/g) ?? []).slice(0, 5);
+  })()`)
+  record('no-raw-template-placeholders', {
+    ok: rawPlaceholders.length === 0,
+    detail: rawPlaceholders.length === 0 ? 'none' : rawPlaceholders.join(','),
+  })
   record('no-uncaught-console-errors', { ok: Array.isArray(consoleErrors) && consoleErrors.length === 0, detail: `${Array.isArray(consoleErrors) ? consoleErrors.length : 'n/a'} error(s)` })
 
   // 14. Dark theme: the frame must follow the shell's dark theme through tokens.

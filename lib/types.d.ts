@@ -36,126 +36,217 @@ export type StageId = (typeof STAGES)[number];
 export declare const DIMENSIONS: readonly ["achievement", "evidence", "recognition", "nextMilestone"];
 export type DimensionKey = (typeof DIMENSIONS)[number];
 /** Every gap rule id this plugin knows. */
-export declare const GAP_RULES: readonly ["G0-why-customer", "G0-why-we", "G0-tech-owner", "G1-focus-overflow", "G2-prereq-invested", "G3-result-no-evidence", "G3-evidence-no-recognition", "action-overdue", "G4-no-next-milestone", "closed-not-closed-loop"];
+export declare const GAP_RULES: readonly ["R1-gate0-missing", "R2-large-amount-no-g0", "R3-g0-passed-no-plan", "R4-criteria-count", "R5-scenarios-count", "R6-risks-overflow", "R7-g2-not-ready", "R8-progress-no-evidence", "R9-evidence-no-recognition", "R10-g3-1-without-g3-2", "R11-no-next-milestone", "R12-stage-stalled"];
 export type GapRule = (typeof GAP_RULES)[number];
 /** Severity a gap carries; `high` sorts first and paints red. */
 export type GapLevel = 'high' | 'medium';
-/** One YAML gate block as stored in the repository. */
-export interface GateRecord {
-    complete?: boolean | null;
-    date?: string | null;
-    indicators_count?: number | null;
-    scenarios_count?: number | null;
-    risks_count?: number | null;
-    prerequisites_ready?: boolean | null;
-    engineers_invested?: boolean | null;
+/** One evidence artefact attached to a progress entry. */
+export interface EvidenceRecord {
+    title?: string | null;
+    link?: string | null;
+    type?: string | null;
 }
-/** One success criterion, normalized for the wire. */
-export interface CriterionView {
-    name: string;
-    version: string;
-    metric: string;
-}
-/** One tracked risk, normalized for the wire. */
-export interface RiskView {
-    name: string;
-    level: string;
-    mitigation: string;
-}
-/** One success criterion as stored in the repository YAML. */
+/** One success criterion (`plan.criteria[]`). */
 export interface CriterionRecord {
     name?: string | null;
-    version?: string | null;
     metric?: string | null;
+    baseline?: string | number | null;
+    target?: string | number | null;
 }
-/** One tracked risk as stored in the repository YAML. */
+/** One tracked risk (`plan.risks[]`). */
 export interface RiskRecord {
     name?: string | null;
     level?: string | null;
     mitigation?: string | null;
 }
-/** The four-dimensional result block. */
-export interface ResultRecord {
-    achievement?: string | null;
-    evidence?: string | null;
-    recognition?: string | null;
-    next_milestone?: string | null;
-}
-/** One append-only timeline round. */
-export interface TimelineRecord {
+/** One progress entry (`progress[]`) — the centre of the v3 model. */
+export interface ProgressRecord {
+    seq?: number | null;
     date?: string | null;
-    round?: number | null;
+    type?: string | null;
     goal?: string | null;
+    items?: (string | null)[] | null;
     actual?: string | null;
-    evidence?: string | null;
-    customer_feedback?: string | null;
-    recognition_scope?: string | null;
+    completion?: string | null;
+    evidence?: EvidenceRecord[] | null;
+    customer?: {
+        synced_with?: string | null;
+        feedback?: string | null;
+        recognition?: string | null;
+    } | null;
+    gate3_1?: string | null;
+    gate3_2?: string | null;
+    next?: {
+        goal?: string | null;
+        owner?: string | null;
+        deadline?: string | null;
+    } | null;
+}
+/** The G0 block: whether the project is worth doing. */
+export interface Gate0Record {
+    why_customer?: string | null;
+    why_us?: string | null;
+    decision_chain?: string | null;
+    post_poc_decision?: string | null;
+    competitor?: string | null;
+    review?: {
+        conclusion?: string | null;
+        reviewer?: string | null;
+        reviewed_at?: string | null;
+    } | null;
+    /** Computed by the ledger; `null` when absent. */
+    missing?: (string | null)[] | null;
+    complete?: boolean | null;
+}
+/** The plan block: how to win (G1/G2). */
+export interface PlanRecord {
+    customer_pain?: string | null;
+    expected_recognition?: string | null;
+    criteria?: CriterionRecord[] | null;
+    scenarios?: (string | null)[] | null;
+    our_edge?: string | null;
+    timeline?: {
+        start?: string | null;
+        end?: string | null;
+    } | null;
+    risks?: RiskRecord[] | null;
+    report_nodes?: (string | null)[] | null;
+    gate1?: {
+        conclusion?: string | null;
+        reviewed_at?: string | null;
+    } | null;
+    gate2?: {
+        ready?: string | null;
+        checked_at?: string | null;
+        prerequisites?: unknown[] | null;
+    } | null;
+}
+/** The outcome block: the conclusion, mostly derived from the last progress. */
+export interface OutcomeRecord {
+    achievement?: string | null;
+    customer_recognition?: string | null;
+    our_proof?: string | null;
+    remaining_risks?: string | null;
+    conclusion?: {
+        proved?: string | null;
+        recognized?: string | null;
+        next_business?: string | null;
+    } | null;
+    business?: {
+        milestone?: string | null;
+        owner?: string | null;
+        deadline?: string | null;
+        status?: string | null;
+    } | null;
+    overall?: string | null;
+    reviewed_at?: string | null;
+}
+/** The identity block. */
+export interface OrgRecord {
+    system?: string | null;
+    company?: string | null;
+    department?: string | null;
 }
 /**
- * One parsed `projects/<poc_id>.yaml`.
+ * One parsed `projects/<poc_id>.yaml` in the v3 model.
  *
- * Every field is optional: the repository is hand-edited, so a partially
- * filled project is normal input, not a malformed record. The gap scanner is
- * what turns absence into a finding.
+ * Every field is optional: the repository is hand-edited, so a partially filled
+ * project is normal input, not a malformed record. The gap scanner is what turns
+ * absence into a finding.
  */
 export interface PocRecord {
     poc_id?: string | null;
     name?: string | null;
-    type?: string | null;
-    tier?: string | null;
-    stage?: string | null;
+    org?: OrgRecord | null;
+    amount_wan?: number | null;
+    poc_type?: string | null;
+    priority?: string | null;
     owner?: string | null;
-    sales_initiator?: string | null;
-    customer_tech_owner?: string | null;
-    why_customer_test?: string | null;
-    why_we_test?: string | null;
-    next_action_goal?: string | null;
-    gates?: Partial<Record<StageId, GateRecord>> | null;
-    success_criteria?: CriterionRecord[] | null;
-    success_scenarios?: (string | null)[] | null;
-    risks?: RiskRecord[] | null;
-    result?: ResultRecord | null;
-    timeline?: TimelineRecord[] | null;
+    sales?: string | null;
+    tech_owner?: string | null;
+    exec_sponsor?: string | null;
+    stage?: string | null;
+    status?: string | null;
+    stage_since?: string | null;
+    gate0?: Gate0Record | null;
+    plan?: PlanRecord | null;
+    progress?: ProgressRecord[] | null;
+    outcome?: OutcomeRecord | null;
     /** Unknown extra keys survive the parse so a future schema still loads. */
     [key: string]: unknown;
 }
-/** The four dimensions resolved to booleans for rendering. */
+/** The four dimensions resolved to presence flags. */
 export type Dimensions = Record<DimensionKey, boolean>;
 /** One row of the project table. */
 export interface ProjectSummary {
     pocId: string;
     name: string;
-    type: string;
-    tier: string;
-    /** Raw `stage` string from the YAML, e.g. `G2-方案验证`. */
+    /** `org.system` — the top grouping dimension. */
+    system: string;
+    /** `org.company` — the company under a system. */
+    company: string;
+    /** `org.department`, or `''`. */
+    department: string;
+    /** `poc_type` enum value. */
+    pocType: string;
+    /** `amount_wan`; `0` when the ledger left it blank. */
+    amountWan: number;
+    /** `priority`, or `''` when not set. */
+    priority: string;
+    /** Raw `stage` string, e.g. `G0-立项`. */
     stageLabel: string;
-    /** Normalized stage id; `null` when the raw value is not recognized. */
+    /** Normalized stage id; `null` when unrecognized or `closed`. */
     stage: StageId | null;
-    /** `true` when the raw stage is `closed`. */
+    /** `true` when `stage` is `closed`. */
     closed: boolean;
-    /**
-     * Per-stage completion straight from `gates.G0..G4.complete`.
-     *
-     * The rail must not infer "done" from the current stage position: a project
-     * can sit at G4 while its G3 gate was never actually signed off, and showing
-     * that as complete would hide the exact gap the ledger exists to expose.
-     */
-    gateComplete: [boolean, boolean, boolean, boolean, boolean];
+    /** `status` enum value, e.g. 进行中. */
+    status: string;
+    /** `stage_since`, or `null`. */
+    stageSince: string | null;
+    /** Whole days in the current stage; `null` without `stage_since`. */
+    daysInStage: number | null;
     owner: string;
+    techOwner: string;
+    /** G0 review conclusion, or `''`. */
+    g0Conclusion: string;
+    /** `true` when `gate0.review.conclusion` is 通过. */
+    g0Passed: boolean;
+    /** `true` when `gate0.complete` is true. */
+    g0Complete: boolean;
+    /**
+     * Per-stage done flags derived from the v3 gate fields, in G0..G4 order.
+     *
+     * v3 has no `gates.G0..G4.complete` array any more, so each stage reads its
+     * own source: G0 from `gate0.complete`, G1 from `plan.gate1.conclusion`,
+     * G2 from `plan.gate2.ready`, G3 from the newest progress `gate3_2`, and G4
+     * from `outcome.achievement`. Deriving from position instead would report
+     * stages as done that were never actually signed off.
+     */
+    stageDone: [boolean, boolean, boolean, boolean, boolean];
+    /** How many of the five G0 prerequisites are missing. */
+    g0MissingCount: number;
     dimensions: Dimensions;
     /** How many of the four dimensions are present. */
     dimensionCount: number;
     gapCount: number;
     highGapCount: number;
-    /** Date of the newest timeline round, or `null` when there is none. */
-    lastActivity: string | null;
-    /** Whole days since {@link lastActivity}; `null` without a timeline. */
-    daysSinceActivity: number | null;
+    /** Number of progress entries. */
+    progressCount: number;
+    /** Date of the newest progress entry, or `null`. */
+    lastProgressDate: string | null;
+    /** One-line summary of the newest progress entry, or `''`. */
+    lastProgressSummary: string;
+    /** Whole days since the newest progress entry; `null` when there is none. */
+    daysSinceProgress: number | null;
+    /** Raw `outcome.achievement`; `''` when unset. Used for the success counter. */
+    outcomeAchievement: string;
+    /** Raw `outcome.customer_recognition`; `''` when unset. */
+    outcomeRecognition: string;
 }
 /** One gap finding, addressed to a project and a rule. */
 export interface GapItem {
     rule: GapRule;
-    /** Rule number 1-8, as numbered in the ledger schema. */
+    /** Rule number 1-12, as numbered in the v3 schema. */
     ruleNo: number;
     level: GapLevel;
     /** Sort weight: higher is more urgent. */
@@ -164,21 +255,27 @@ export interface GapItem {
     pocName: string;
     /** The offending YAML field, when the rule targets exactly one. */
     field?: string;
-    /** Rule-specific numbers the Client interpolates into its copy. */
+    /** Rule-specific values the Client interpolates into its copy. */
     params?: Record<string, number | string>;
 }
-/** The headline counters above the project table. */
+/** The headline counters above the project table (v3). */
 export interface Stats {
-    /** Projects that are neither `closed` nor fully converted. */
-    active: number;
-    /** Projects missing at least one of the three G0 prerequisites. */
-    g0Incomplete: number;
-    /** Projects carrying a high-severity gap. */
-    atRisk: number;
-    /** Projects with achievement, evidence and recognition all present. */
-    convertible: number;
+    /** Every project in the ledger. */
     total: number;
-    closed: number;
+    /** `gate0.review.conclusion === '通过'`. */
+    g0Passed: number;
+    /** `status === '进行中'`. */
+    inProgress: number;
+    /** Sum of `amount_wan`, in 万元. */
+    amountTotalWan: number;
+    /** `gate0.complete === true`. */
+    g0Complete: number;
+    /** Projects whose newest progress is waiting on the customer. */
+    awaitingCustomer: number;
+    /** `outcome.achievement === '达成'` and the customer recognised it. */
+    succeeded: number;
+    /** `status === '暂停' | '已关闭' | '已取消'`. */
+    stopped: number;
 }
 /** Everything the overview page renders. */
 export interface Snapshot {
@@ -196,51 +293,95 @@ export interface Snapshot {
     /** Non-fatal findings: unreadable files, unparsable YAML, duplicates. */
     warnings: string[];
 }
-/** One gate row on the detail page. */
-export interface GateDetail {
-    stage: StageId;
-    complete: boolean;
-    date: string | null;
-    indicators: number | null;
-    scenarios: number | null;
-    risks: number | null;
-    prerequisitesReady: boolean | null;
-    engineersInvested: boolean | null;
-}
-/** One timeline round as the detail page receives it: every field present. */
-export interface TimelineRound {
+/** One progress entry as the detail page receives it: every field present. */
+export interface ProgressView {
+    seq: number | null;
     date: string;
-    round: number | null;
+    type: string;
     goal: string;
+    items: string[];
     actual: string;
-    evidence: string;
-    customer_feedback: string;
-    recognition_scope: string;
+    completion: string;
+    evidence: Array<{
+        title: string;
+        link: string;
+        type: string;
+    }>;
+    customer: {
+        syncedWith: string;
+        feedback: string;
+        recognition: string;
+    };
+    gate3_1: string;
+    gate3_2: string;
+    next: {
+        goal: string;
+        owner: string;
+        deadline: string;
+    };
 }
-/** The result block as the detail page receives it: every field present. */
-export interface ResultView {
+/** The outcome block as the detail page receives it: every field present. */
+export interface OutcomeView {
     achievement: string;
-    evidence: string;
-    recognition: string;
-    next_milestone: string;
+    customerRecognition: string;
+    ourProof: string;
+    remainingRisks: string;
+    proved: string;
+    recognized: string;
+    nextBusiness: string;
+    milestone: string;
+    businessOwner: string;
+    businessDeadline: string;
+    businessStatus: string;
+    overall: string;
+    reviewedAt: string;
+}
+/** The G0 block as the detail page receives it. */
+export interface Gate0View {
+    whyCustomer: string;
+    whyUs: string;
+    decisionChain: string;
+    postPocDecision: string;
+    competitor: string;
+    conclusion: string;
+    reviewer: string;
+    reviewedAt: string;
+    missing: string[];
+    complete: boolean;
+}
+/** The plan block as the detail page receives it. */
+export interface PlanView {
+    customerPain: string;
+    expectedRecognition: string;
+    criteria: Array<{
+        name: string;
+        metric: string;
+        baseline: string;
+        target: string;
+    }>;
+    scenarios: string[];
+    ourEdge: string;
+    timelineStart: string;
+    timelineEnd: string;
+    risks: Array<{
+        name: string;
+        level: string;
+        mitigation: string;
+    }>;
+    reportNodes: string[];
+    gate1Conclusion: string;
+    gate2Ready: string;
 }
 /** Everything the detail page renders. */
 export interface ProjectDetail {
     summary: ProjectSummary;
-    type: string;
-    tier: string;
-    owner: string;
-    salesInitiator: string;
-    customerTechOwner: string;
-    whyCustomerTest: string;
-    whyWeTest: string;
-    nextActionGoal: string;
-    gates: GateDetail[];
-    criteria: CriterionView[];
-    scenarios: string[];
-    risks: RiskView[];
-    result: ResultView;
-    timeline: TimelineRound[];
+    org: OrgRecord;
+    sales: string;
+    execSponsor: string;
+    gate0: Gate0View;
+    plan: PlanView;
+    progress: ProgressView[];
+    outcome: OutcomeView;
     gaps: GapItem[];
 }
 /** One endpoint outcome, mirroring the Connection RPC result envelope. */
@@ -264,27 +405,10 @@ export type PocRequest = {
     action: 'detail';
     pocId: string;
 } | {
-    action: 'export';
-    pocIds: string[];
-    mode: 'fill' | 'blank';
-} | {
     action: 'risks';
 } | {
     action: 'timeline';
 };
-/** Reply to `export`: a self-contained HTML form the user saves to disk. */
-export interface ExportOutcome {
-    /** The generated HTML document, ready to write as a file. */
-    html: string;
-    /** Suggested file name, e.g. `poc-forms-20261105-3.html`. */
-    fileName: string;
-    /** Which projects the form covers (empty for a blank form). */
-    pocIds: string[];
-    /** `fill` pre-fills from the ledger; `blank` is a new-project form. */
-    mode: 'fill' | 'blank';
-    /** Size of the generated document, in characters. */
-    bytes: number;
-}
 /** One risk row on the risk board. */
 export interface RiskRow {
     pocId: string;
@@ -321,12 +445,24 @@ export interface TimelineEntry {
     pocName: string;
     stage: StageId | null;
     date: string;
-    round: number | null;
+    /** `progress[].seq`; `null` when the ledger left it blank. */
+    seq: number | null;
+    /** `progress[].type` — 内部Review / 客户阶段同步 / Checkpoint. */
+    type: string;
     goal: string;
     actual: string;
+    completion: string;
+    /** Evidence titles, joined for one-line display. */
     evidence: string;
+    /** How many evidence artefacts this entry carries. */
+    evidenceCount: number;
     customerFeedback: string;
-    recognitionScope: string;
+    recognition: string;
+    gate3_1: string;
+    gate3_2: string;
+    nextGoal: string;
+    nextOwner: string;
+    nextDeadline: string;
 }
 /** The global timeline view. */
 export interface GlobalTimeline {

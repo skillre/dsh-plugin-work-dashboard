@@ -1,22 +1,22 @@
 {
   "package": "@skillre/dsh-plugin-work-dashboard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "dsh": "0.2.2-rc.1",
   "tarball": {
-    "path": "/Users/skillre/dsh-plugins/repos/dsh-plugin-work-dashboard/skillre-dsh-plugin-work-dashboard-0.1.0.tgz",
-    "sha256": "220f3424845aa9ba5359732b92320ff945acb57d480731955122e7a6d7bb5354"
+    "path": "skillre-dsh-plugin-work-dashboard-0.2.0.tgz",
+    "sha256": "f28928fdc35769a446c35cbd25f18b28d11c5bcaef56de21c68ce0f8e72fcc01"
   },
-  "profile": "work-dashboard-test-7fe2c69a",
+  "profile": "work-dashboard-test-7bbe715d",
   "checks": [
     "command: dsh --version -> exit 0",
     "dsh-version",
     "local-remote-and-gh-stub",
-    "command: dsh --profile work-dashboard-test-7fe2c69a --from-default-profile web --dump-config -> exit 0",
+    "command: dsh --profile work-dashboard-test-7bbe715d --from-default-profile web --dump-config -> exit 0",
     "profile-template-created",
-    "command: dsh plugin --profile work-dashboard-test-7fe2c69a add /Users/skillre/dsh-plugins/repos/dsh-plugin-work-dashboard/skillre-dsh-plugin-work-dashboard-0.1.0.tgz --ignore-scripts --store-dir /private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-work-dashboard-mount-fy59nj/pnpm-store -> exit 0",
+    "command: dsh plugin --profile work-dashboard-test-7bbe715d add /Users/skillre/dsh-plugins/repos/dsh-plugin-work-dashboard/skillre-dsh-plugin-work-dashboard-0.1.0.tgz --ignore-scripts --store-dir /private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-work-dashboard-mount-PQO5x8/pnpm-store -> exit 0",
     "profile-tarball-install",
     "packed-dependency-and-selection",
-    "command: dsh --profile work-dashboard-test-7fe2c69a --patch /private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-work-dashboard-mount-fy59nj/owned-cache.patch.yml --dump-config -> exit 0",
+    "command: dsh --profile work-dashboard-test-7bbe715d --patch /private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-work-dashboard-mount-PQO5x8/owned-cache.patch.yml --dump-config -> exit 0",
     "dump-config",
     "packed-payload-present",
     "cache-absent-before-mount",
@@ -30,13 +30,6 @@
     "api-auth-fence",
     "cache-is-real-clone",
     "cache-credential-not-persisted",
-    "api-export-single-form",
-    "export-is-self-contained",
-    "api-export-batch-form",
-    "api-export-blank-form",
-    "export-form-yaml-round-trips",
-    "export-form-round-trip-is-lossless",
-    "api-export-batch-is-valid-yaml",
     "api-risk-board-sorted",
     "api-global-timeline-sorted",
     "api-timeline-reports-silent-projects",
@@ -47,52 +40,50 @@
   "endpoint": {
     "cold": {
       "cacheReady": false,
-      "cachePath": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-work-dashboard-mount-fy59nj/home/cache/work-dashboard/repo"
+      "cachePath": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-work-dashboard-mount-PQO5x8/home/cache/work-dashboard/repo"
     },
     "refresh1": {
       "mode": "clone",
       "projects": 3,
-      "durationMs": 355
+      "durationMs": 760
     },
     "board": {
       "stats": {
-        "active": 3,
-        "g0Incomplete": 1,
-        "atRisk": 2,
-        "convertible": 1,
         "total": 3,
-        "closed": 0
+        "g0Passed": 2,
+        "inProgress": 3,
+        "amountTotalWan": 2600,
+        "g0Complete": 2,
+        "awaitingCustomer": 0,
+        "succeeded": 1,
+        "stopped": 0
       },
       "gaps": 4,
-      "firstRule": "G4-no-next-milestone"
+      "firstRule": "R11-no-next-milestone"
     },
     "detail": {
-      "gates": 5,
-      "timeline": 3
-    },
-    "export": {
-      "fileName": "poc-form-POC-2026-001-20261105.html",
-      "bytes": 29795
+      "progress": 2,
+      "achievement": "达成"
     },
     "risks": {
-      "rows": 3,
+      "rows": 2,
       "counts": {
         "high": 1,
-        "medium": 2,
+        "medium": 1,
         "low": 0,
         "unset": 0,
-        "total": 3
+        "total": 2
       }
     },
     "timeline": {
-      "entries": 5,
+      "entries": 3,
       "months": 3,
       "silent": 1
     }
   },
   "cleanup": {
-    "ownedRoot": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-work-dashboard-mount-fy59nj",
-    "profile": "work-dashboard-test-7fe2c69a",
+    "ownedRoot": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-work-dashboard-mount-PQO5x8",
+    "profile": "work-dashboard-test-7bbe715d",
     "processesStopped": true,
     "rootRemoved": true,
     "verified": true

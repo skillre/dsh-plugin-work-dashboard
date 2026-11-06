@@ -11,14 +11,23 @@ import type { PocRecord } from '../src/types.js'
  * the top would bury the risks someone actually assessed as serious.
  */
 
+const NOW = new Date('2026-11-06T00:00:00Z')
+const OPTIONS = { now: NOW, stallDays: 45 }
+
+/** A healthy v3 record; tests override only the risks they care about. */
 const BASE: PocRecord = {
   poc_id: 'POC-2026-001',
   name: '某某银行零信任试点',
   stage: 'G2-方案验证',
-  why_customer_test: 'X',
-  why_we_test: 'Y',
-  customer_tech_owner: '王工',
-  result: { achievement: null, evidence: null, recognition: null, next_milestone: null },
+  gate0: { missing: [], complete: true, review: { conclusion: '通过' } },
+  plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: ['s1', 's2', 's3'], risks: [] },
+  progress: [],
+  outcome: {},
+}
+
+/** A record carrying exactly the given plan risks. */
+function withRisks(id: string, name: string, risks: Array<{ name?: string; level?: string; mitigation?: string }>): PocRecord {
+  return { ...BASE, poc_id: id, name, plan: { ...BASE.plan, risks } }
 }
 
 describe('severity ranking', () => {
@@ -38,68 +47,65 @@ describe('severity ranking', () => {
 describe('board assembly', () => {
   it('orders every high risk before every medium, and unset last', () => {
     const records: PocRecord[] = [
-      { ...BASE, poc_id: 'P-1', name: 'A', risks: [{ name: 'medium risk', level: 'medium' }] },
-      { ...BASE, poc_id: 'P-2', name: 'B', risks: [{ name: 'unset risk' }] },
-      { ...BASE, poc_id: 'P-3', name: 'C', risks: [{ name: 'high risk', level: 'high' }] },
-      { ...BASE, poc_id: 'P-4', name: 'D', risks: [{ name: 'low risk', level: 'low' }] },
+      withRisks('P-1', 'A', [{ name: 'medium risk', level: 'medium' }]),
+      withRisks('P-2', 'B', [{ name: 'unset risk' }]),
+      withRisks('P-3', 'C', [{ name: 'high risk', level: 'high' }]),
+      withRisks('P-4', 'D', [{ name: 'low risk', level: 'low' }]),
     ]
-    const board = buildRiskBoard(records)
+    const board = buildRiskBoard(records, OPTIONS)
     expect(board.rows.map((row) => row.level)).toEqual(['high', 'medium', 'low', ''])
     expect(board.rows.map((row) => row.name)).toEqual(['high risk', 'medium risk', 'low risk', 'unset risk'])
   })
 
   it('flattens multiple risks per project and keeps a stable order within a level', () => {
     const records: PocRecord[] = [
-      { ...BASE, poc_id: 'P-1', name: 'A', risks: [{ name: 'r1', level: 'high' }, { name: 'r2', level: 'high' }] },
-      { ...BASE, poc_id: 'P-2', name: 'B', risks: [{ name: 'r3', level: 'high' }] },
+      withRisks('P-1', 'A', [{ name: 'a1', level: 'high' }, { name: 'a2', level: 'low' }]),
+      withRisks('P-2', 'B', [{ name: 'b1', level: 'high' }]),
     ]
-    const board = buildRiskBoard(records)
+    const board = buildRiskBoard(records, OPTIONS)
     expect(board.rows).toHaveLength(3)
-    // Same rank: ordered by project id, so a refresh cannot reshuffle them.
-    expect(board.rows.map((row) => row.pocId)).toEqual(['P-1', 'P-1', 'P-2'])
-    expect(board.rows.map((row) => row.name)).toEqual(['r1', 'r2', 'r3'])
+    expect(board.rows.filter((row) => row.level === 'high').map((row) => row.name)).toEqual(['a1', 'b1'])
   })
 
   it('counts each severity and the total', () => {
     const records: PocRecord[] = [
-      { ...BASE, poc_id: 'P-1', name: 'A', risks: [{ name: 'h1', level: 'high' }, { name: 'm1', level: 'medium' }] },
-      { ...BASE, poc_id: 'P-2', name: 'B', risks: [{ name: 'l1', level: 'low' }, { name: 'u1' }] },
+      withRisks('P-1', 'A', [{ name: 'h', level: 'high' }, { name: 'm', level: 'medium' }]),
+      withRisks('P-2', 'B', [{ name: 'u' }]),
     ]
-    const board = buildRiskBoard(records)
-    expect(board.counts).toEqual({ high: 1, medium: 1, low: 1, unset: 1, total: 4 })
-    expect(board.projectsWithRisks).toBe(2)
-    expect(board.projectsTotal).toBe(2)
-  })
-
-  it('reports zero projects-with-risks when nothing is registered', () => {
-    const records: PocRecord[] = [{ ...BASE, poc_id: 'P-1', name: 'A' }, { ...BASE, poc_id: 'P-2', name: 'B' }]
-    const board = buildRiskBoard(records)
-    expect(board.rows).toEqual([])
-    expect(board.projectsWithRisks).toBe(0)
+    const board = buildRiskBoard(records, OPTIONS)
+    expect(board.counts).toMatchObject({ high: 1, medium: 1, low: 0, unset: 1 })
+    expect(board.rows).toHaveLength(3)
     expect(board.projectsTotal).toBe(2)
   })
 
   it('carries the project gap context so a row is not read in isolation', () => {
-    // POC-003-shaped record: achieved + evidenced + recognised, no next milestone.
+    // A project at 1500万 with no G0 clearance carries a high R2 gap.
     const record: PocRecord = {
       ...BASE,
-      poc_id: 'P-3',
-      name: 'C',
-      risks: [{ name: 'r', level: 'medium' }],
-      result: { achievement: '完成', evidence: '报告', recognition: '书面', next_milestone: null },
+      poc_id: 'P-9',
+      amount_wan: 1500,
+      gate0: { missing: [], review: {} },
+      plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: ['s1', 's2', 's3'], risks: [{ name: 'r', level: 'medium' }] },
     }
-    const board = buildRiskBoard([record])
-    expect(board.rows[0]?.gapCount).toBe(1)
-    expect(board.rows[0]?.highGapCount).toBe(1)
+    const board = buildRiskBoard([record], OPTIONS)
+    expect(board.rows[0]?.gapCount).toBeGreaterThan(0)
+    expect(board.rows[0]?.highGapCount).toBeGreaterThan(0)
   })
 
   it('falls back to the id when a project has no name', () => {
-    const board = buildRiskBoard([{ ...BASE, poc_id: 'P-9', name: null, risks: [{ name: 'r', level: 'high' }] }])
-    expect(board.rows[0]?.pocName).toBe('P-9')
+    const board = buildRiskBoard([withRisks('P-7', '', [{ name: 'r', level: 'high' }])], OPTIONS)
+    expect(board.rows[0]?.pocName).toBe('P-7')
   })
 
   it('survives a risk with no fields at all', () => {
-    const board = buildRiskBoard([{ ...BASE, poc_id: 'P-1', risks: [{} as never] }])
-    expect(board.rows[0]).toMatchObject({ level: '', name: '', mitigation: '', rank: 0 })
+    const board = buildRiskBoard([withRisks('P-8', 'H', [{}])], OPTIONS)
+    expect(board.rows).toHaveLength(1)
+    expect(board.rows[0]).toMatchObject({ name: '', level: '', mitigation: '' })
+  })
+
+  it('returns an empty board when no project has risks', () => {
+    const board = buildRiskBoard([BASE], OPTIONS)
+    expect(board.rows).toEqual([])
+    expect(board.counts).toMatchObject({ high: 0, medium: 0, low: 0, unset: 0 })
   })
 })

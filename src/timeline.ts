@@ -1,11 +1,10 @@
 /**
- * The global timeline: every round of every project, newest first.
+ * The global timeline: every progress entry of every project, newest first.
  *
- * The schema says a timeline is append-only, one entry per review round. Read
- * project by project, that history is invisible: you see the latest state and
- * nothing about rhythm. The global view answers the questions the per-project
- * page cannot — who has gone quiet, when did the team actually do things, and
- * which rounds produced evidence versus only a conversation.
+ * v3 is progress-centred: `progress[]` IS the history, so this view is the only
+ * place that shows rhythm across the whole portfolio — who has gone quiet, when
+ * did the team actually do things, and which entries produced evidence versus
+ * only a conversation.
  *
  * Entries are ordered by date descending, with the project id as a stable
  * tiebreaker. Dates that do not parse are excluded from the range and the month
@@ -13,7 +12,7 @@
  * record the ledger actually contains.
  */
 
-import { normalizeStage, text } from './gap.js'
+import { normalizeStage, numberOrNull, text } from './gap.js'
 import type { GlobalTimeline, PocRecord, TimelineEntry } from './types.js'
 
 /** `true` when a value is a real `YYYY-MM-DD` date. */
@@ -24,11 +23,10 @@ function isDate(value: string): boolean {
 /**
  * Build the global timeline from the loaded records.
  *
- * `now` is injected so the "silent projects" list is deterministic in tests;
- * the silence threshold is expressed in days and matches the gap rule's own
+ * The silence threshold is expressed in days and matches the gap rule's own
  * default rather than inventing a second notion of "stale".
  */
-export function buildGlobalTimeline(records: readonly PocRecord[], options: { staleDays: number }): GlobalTimeline {
+export function buildGlobalTimeline(records: readonly PocRecord[], options: { stallDays: number }): GlobalTimeline {
   const entries: TimelineEntry[] = []
   const silentProjects: Array<{ pocId: string; pocName: string }> = []
 
@@ -36,24 +34,38 @@ export function buildGlobalTimeline(records: readonly PocRecord[], options: { st
     const pocId = text(record.poc_id)
     const pocName = text(record.name) === '' ? pocId : text(record.name)
     const { stage } = normalizeStage(record.stage)
-    const rounds = Array.isArray(record.timeline) ? record.timeline : []
-    if (rounds.length === 0) {
+    const progress = Array.isArray(record.progress) ? record.progress : []
+    if (progress.length === 0) {
       silentProjects.push({ pocId, pocName })
       continue
     }
-    for (const raw of rounds) {
-      const value = (raw ?? {}) as Record<string, unknown>
+    for (const raw of progress) {
+      const entry = (raw ?? {}) as Record<string, unknown>
+      const evidence = Array.isArray(entry.evidence) ? entry.evidence : []
+      const customer = (entry.customer ?? {}) as Record<string, unknown>
+      const next = (entry.next ?? {}) as Record<string, unknown>
+      const titles = evidence
+        .map((item) => text((item as Record<string, unknown> | null | undefined)?.title))
+        .filter((title) => title !== '')
       entries.push({
         pocId,
         pocName,
         stage,
-        date: text(value.date),
-        round: typeof value.round === 'number' && Number.isFinite(value.round) ? value.round : null,
-        goal: text(value.goal),
-        actual: text(value.actual),
-        evidence: text(value.evidence),
-        customerFeedback: text(value.customer_feedback),
-        recognitionScope: text(value.recognition_scope),
+        date: text(entry.date),
+        seq: numberOrNull(entry.seq),
+        type: text(entry.type),
+        goal: text(entry.goal),
+        actual: text(entry.actual),
+        completion: text(entry.completion),
+        evidence: titles.join(' · '),
+        evidenceCount: evidence.length,
+        customerFeedback: text(customer.feedback),
+        recognition: text(customer.recognition),
+        gate3_1: text(entry.gate3_1),
+        gate3_2: text(entry.gate3_2),
+        nextGoal: text(next.goal),
+        nextOwner: text(next.owner),
+        nextDeadline: text(next.deadline),
       })
     }
   }
@@ -65,7 +77,7 @@ export function buildGlobalTimeline(records: readonly PocRecord[], options: { st
     const rightDated = isDate(right.date)
     if (leftDated !== rightDated) return leftDated ? -1 : 1
     if (leftDated && rightDated && left.date !== right.date) return right.date.localeCompare(left.date)
-    return left.pocId.localeCompare(right.pocId) || (left.round ?? 0) - (right.round ?? 0)
+    return left.pocId.localeCompare(right.pocId) || (left.seq ?? 0) - (right.seq ?? 0)
   })
 
   const dated = entries.filter((entry) => isDate(entry.date)).map((entry) => entry.date).sort()
@@ -82,6 +94,6 @@ export function buildGlobalTimeline(records: readonly PocRecord[], options: { st
     .map(([month, count]) => ({ month, count }))
     .sort((left, right) => right.month.localeCompare(left.month))
 
-  void options.staleDays
+  void options.stallDays
   return { entries, range, months, silentProjects }
 }

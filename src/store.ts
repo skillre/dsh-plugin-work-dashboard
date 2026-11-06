@@ -1,27 +1,49 @@
 /**
- * Read-only ledger store.
+ * Read-only ledger store (v3).
  *
  * The store turns the cloned `projects/*.yaml` files into the JSON shapes the
  * Client renders. It never writes: the repository is a read-only copy and the
- * real data source is GitHub (writes arrive in milestone 2, through a PR).
+ * real data source is GitHub.
  *
- * Parsing uses `yaml`'s `parseDocument`, not `parse` + `stringify`: comments and
- * key order survive, which milestone 2 needs when it edits a record in place.
- * One unreadable or unparsable file is reported as a warning and skipped — a
- * single bad hand-edit must not blank the whole board.
+ * v3 is **progress-centred**: a project's state is its identity + gate0 + plan +
+ * progress stream + outcome. The summary therefore reads `gate0` for the G0
+ * verdict, `plan` for focus, `progress` for activity, and `outcome` for the four
+ * dimensions — there is no separate `result` block to reconcile.
+ *
+ * Parsing uses `yaml`'s `parse`. One unreadable or unparsable file is reported
+ * as a warning and skipped: a single bad hand-edit must not blank the whole
+ * board.
  */
 
 import YAML from 'yaml'
-import { daysSince, lastActivity, normalizeStage, readDimensions, scanGaps, text } from './gap.js'
+import {
+  daysSince,
+  lastProgressDate,
+  latestProgress,
+  normalizeStage,
+  numberOrNull,
+  readDimensions,
+  scanGaps,
+  text,
+} from './gap.js'
 import type { RepoCache } from './repo.js'
 import { RepoError } from './repo.js'
-import type { CriterionView, GapItem, PocRecord, ProjectDetail, ProjectSummary, RiskView, Snapshot, Stats, StageId, TimelineRound } from './types.js'
-import { STAGES } from './types.js'
+import type {
+  GapItem,
+  OrgRecord,
+  PocRecord,
+  ProjectDetail,
+  ProjectSummary,
+  Snapshot,
+  Stats,
+  StageId,
+} from './types.js'
 
 /** Injected clock so the store stays testable and the rules stay pure. */
 export interface StoreOptions {
   now: () => Date
-  staleDays: number
+  /** Days in one stage after which rule 12 fires. */
+  stallDays: number
 }
 
 /** The Host-side view model builder. */
@@ -63,7 +85,6 @@ export class PocStore {
       const record = parsed as PocRecord
       const id = text(record.poc_id)
       if (id === '') {
-        // Fall back to the file name so the row still renders and can be fixed.
         record.poc_id = basename(file).replace(/\.ya?ml$/, '')
         warnings.push(`${basename(file)}: poc_id is missing; using the file name instead.`)
       }
@@ -82,7 +103,7 @@ export class PocStore {
   /** The overview snapshot; never throws for a missing cache, it reports it. */
   async snapshot(): Promise<Snapshot> {
     const cacheReady = await this.cache.isReady()
-    const repository = this.repositoryLabel()
+    const repository = this.cache.repository
     if (!cacheReady) {
       return {
         cacheReady: false,
@@ -97,9 +118,11 @@ export class PocStore {
     }
     const { records, warnings } = await this.load()
     const now = this.options.now()
-    const projects = records.map((record) => summarize(record, now, this.options.staleDays))
+    const projects = records.map((record) => summarize(record, now, this.options.stallDays))
     const gaps: GapItem[] = []
-    for (const record of records) gaps.push(...scanGaps(record, { now, staleDays: this.options.staleDays }))
+    for (const record of records) {
+      gaps.push(...scanGaps(record, { now, stallDays: this.options.stallDays }))
+    }
     gaps.sort(compareGaps)
     return {
       cacheReady: true,
@@ -107,7 +130,7 @@ export class PocStore {
       fetchedAt: this.cache.lastFetchedAt,
       cachePath: this.cache.repoPath,
       projects: projects.sort(compareProjects),
-      stats: computeStats(projects, gaps),
+      stats: computeStats(projects),
       gaps,
       warnings,
     }
@@ -120,35 +143,97 @@ export class PocStore {
     const record = records.find((candidate) => text(candidate.poc_id) === pocId)
     if (record === undefined) return null
     const now = this.options.now()
-    const summary = summarize(record, now, this.options.staleDays)
+    const summary = summarize(record, now, this.options.stallDays)
+    const gate0 = record.gate0 ?? {}
+    const plan = record.plan ?? {}
+    const outcome = record.outcome ?? {}
+    const missing = Array.isArray(gate0.missing) ? gate0.missing.map(text).filter((item) => item !== '') : []
     return {
       summary,
-      type: text(record.type),
-      tier: text(record.tier),
-      owner: text(record.owner),
-      salesInitiator: text(record.sales_initiator),
-      customerTechOwner: text(record.customer_tech_owner),
-      whyCustomerTest: text(record.why_customer_test),
-      whyWeTest: text(record.why_we_test),
-      nextActionGoal: text(record.next_action_goal),
-      gates: readGates(record),
-      criteria: Array.isArray(record.success_criteria) ? record.success_criteria.map(normalizeCriterion) : [],
-      scenarios: Array.isArray(record.success_scenarios) ? record.success_scenarios.map(text).filter((value) => value !== '') : [],
-      risks: Array.isArray(record.risks) ? record.risks.map(normalizeRisk) : [],
-      result: {
-        achievement: text(record.result?.achievement),
-        evidence: text(record.result?.evidence),
-        recognition: text(record.result?.recognition),
-        next_milestone: text(record.result?.next_milestone),
+      org: {
+        system: text((record.org ?? {}).system),
+        company: text((record.org ?? {}).company),
+        department: text((record.org ?? {}).department),
       },
-      timeline: Array.isArray(record.timeline) ? record.timeline.map(normalizeRound) : [],
-      gaps: scanGaps(record, { now, staleDays: this.options.staleDays }),
+      sales: text(record.sales),
+      execSponsor: text(record.exec_sponsor),
+      gate0: {
+        whyCustomer: text(gate0.why_customer),
+        whyUs: text(gate0.why_us),
+        decisionChain: text(gate0.decision_chain),
+        postPocDecision: text(gate0.post_poc_decision),
+        competitor: text(gate0.competitor),
+        conclusion: text(gate0.review?.conclusion),
+        reviewer: text(gate0.review?.reviewer),
+        reviewedAt: text(gate0.review?.reviewed_at),
+        missing,
+        complete: gate0.complete === true,
+      },
+      plan: {
+        customerPain: text(plan.customer_pain),
+        expectedRecognition: text(plan.expected_recognition),
+        criteria: (plan.criteria ?? []).map((item) => ({
+          name: text(item?.name),
+          metric: text(item?.metric),
+          baseline: text(item?.baseline),
+          target: text(item?.target),
+        })),
+        scenarios: (plan.scenarios ?? []).map(text).filter((item) => item !== ''),
+        ourEdge: text(plan.our_edge),
+        timelineStart: text(plan.timeline?.start),
+        timelineEnd: text(plan.timeline?.end),
+        risks: (plan.risks ?? []).map((item) => ({
+          name: text(item?.name),
+          level: text(item?.level).toLowerCase(),
+          mitigation: text(item?.mitigation),
+        })),
+        reportNodes: (plan.report_nodes ?? []).map(text).filter((item) => item !== ''),
+        gate1Conclusion: text(plan.gate1?.conclusion),
+        gate2Ready: text(plan.gate2?.ready),
+      },
+      progress: (record.progress ?? []).map((entry) => ({
+        seq: numberOrNull(entry?.seq),
+        date: text(entry?.date),
+        type: text(entry?.type),
+        goal: text(entry?.goal),
+        items: (entry?.items ?? []).map(text).filter((item) => item !== ''),
+        actual: text(entry?.actual),
+        completion: text(entry?.completion),
+        evidence: (entry?.evidence ?? []).map((item) => ({
+          title: text(item?.title),
+          link: text(item?.link),
+          type: text(item?.type),
+        })),
+        customer: {
+          syncedWith: text(entry?.customer?.synced_with),
+          feedback: text(entry?.customer?.feedback),
+          recognition: text(entry?.customer?.recognition),
+        },
+        gate3_1: text(entry?.gate3_1),
+        gate3_2: text(entry?.gate3_2),
+        next: {
+          goal: text(entry?.next?.goal),
+          owner: text(entry?.next?.owner),
+          deadline: text(entry?.next?.deadline),
+        },
+      })),
+      outcome: {
+        achievement: text(outcome.achievement),
+        customerRecognition: text(outcome.customer_recognition),
+        ourProof: text(outcome.our_proof),
+        remainingRisks: text(outcome.remaining_risks),
+        proved: text(outcome.conclusion?.proved),
+        recognized: text(outcome.conclusion?.recognized),
+        nextBusiness: text(outcome.conclusion?.next_business),
+        milestone: text(outcome.business?.milestone),
+        businessOwner: text(outcome.business?.owner),
+        businessDeadline: text(outcome.business?.deadline),
+        businessStatus: text(outcome.business?.status),
+        overall: text(outcome.overall),
+        reviewedAt: text(outcome.reviewed_at),
+      },
+      gaps: scanGaps(record, { now, stallDays: this.options.stallDays }),
     }
-  }
-
-  /** `owner/name` as configured; the Client shows it as the data-source label. */
-  private repositoryLabel(): string {
-    return this.cache.repository
   }
 }
 
@@ -158,109 +243,115 @@ function basename(path: string): string {
   return index === -1 ? path : path.slice(index + 1)
 }
 
-/** One criterion, with every field coerced to a string. */
-function normalizeCriterion(raw: unknown): CriterionView {
-  const value = (raw ?? {}) as Record<string, unknown>
-  return { name: text(value.name), version: text(value.version), metric: text(value.metric) }
-}
-
-/** One risk, with every field coerced to a string. */
-function normalizeRisk(raw: unknown): RiskView {
-  const value = (raw ?? {}) as Record<string, unknown>
-  return { name: text(value.name), level: text(value.level).toLowerCase(), mitigation: text(value.mitigation) }
-}
-
-/** One timeline round, with every field coerced and normalized. */
-function normalizeRound(raw: unknown): TimelineRound {
-  const value = (raw ?? {}) as Record<string, unknown>
-  const round = typeof value.round === 'number' && Number.isFinite(value.round) ? value.round : null
-  return {
-    date: text(value.date),
-    round,
-    goal: text(value.goal),
-    actual: text(value.actual),
-    evidence: text(value.evidence),
-    customer_feedback: text(value.customer_feedback),
-    recognition_scope: text(value.recognition_scope),
-  }
-}
-
-/** The five gate rows in stage order, with absent gates rendered as pending. */
-function readGates(record: PocRecord): Array<{
-  stage: StageId
-  complete: boolean
-  date: string | null
-  indicators: number | null
-  scenarios: number | null
-  risks: number | null
-  prerequisitesReady: boolean | null
-  engineersInvested: boolean | null
-}> {
-  const gates = record.gates ?? {}
-  return STAGES.map((stage) => {
-    const gate = gates[stage] ?? {}
-    return {
-      stage,
-      complete: gate.complete === true,
-      date: text(gate.date) === '' ? null : text(gate.date),
-      indicators: numberOrNull(gate.indicators_count),
-      scenarios: numberOrNull(gate.scenarios_count),
-      risks: numberOrNull(gate.risks_count),
-      prerequisitesReady: typeof gate.prerequisites_ready === 'boolean' ? gate.prerequisites_ready : null,
-      engineersInvested: typeof gate.engineers_invested === 'boolean' ? gate.engineers_invested : null,
-    }
-  })
-}
-
-/** A finite number, or `null`. */
-function numberOrNull(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null
+/** One line describing the newest progress entry, for the table's summary cell. */
+function progressSummary(poc: PocRecord): string {
+  const last = latestProgress(poc)
+  if (last === null) return ''
+  const parts: string[] = []
+  const type = text(last.type)
+  if (type !== '') parts.push(type)
+  const actual = text(last.actual)
+  if (actual !== '') parts.push(actual.replace(/\s+/g, ' ').slice(0, 80))
+  const completion = text(last.completion)
+  if (completion !== '') parts.push(completion)
+  return parts.join(' · ')
 }
 
 /** Collapse one record into the table row the overview renders. */
-function summarize(record: PocRecord, now: Date, staleDays: number): ProjectSummary {
+function summarize(record: PocRecord, now: Date, stallDays: number): ProjectSummary {
   const dimensions = readDimensions(record)
   const { stage, closed } = normalizeStage(record.stage)
-  const gaps = scanGaps(record, { now, staleDays })
-  const activity = lastActivity(record)
-  const gateComplete = STAGES.map((stage) => (record.gates?.[stage]?.complete === true)) as [boolean, boolean, boolean, boolean, boolean]
+  const gaps = scanGaps(record, { now, stallDays })
+  const gate0 = record.gate0 ?? {}
+  const activity = lastProgressDate(record)
+  const stageSince = text(record.stage_since)
+  const progress = Array.isArray(record.progress) ? record.progress : []
+  const missing = Array.isArray(gate0.missing) ? gate0.missing.map(text).filter((item) => item !== '') : []
+  const plan = record.plan ?? {}
+  const last = latestProgress(record)
+  // v3 has no gate-completion array: each stage reads its own source field.
+  const stageDone: [boolean, boolean, boolean, boolean, boolean] = [
+    gate0.complete === true,
+    text(plan.gate1?.conclusion) === '通过',
+    text(plan.gate2?.ready) === 'Ready',
+    last !== null && text(last.gate3_2) === '已确认',
+    text((record.outcome ?? {}).achievement) === '达成',
+  ]
   return {
     pocId: text(record.poc_id),
     name: text(record.name) === '' ? text(record.poc_id) : text(record.name),
-    type: text(record.type),
-    tier: text(record.tier),
+    system: text((record.org ?? {}).system),
+    company: text((record.org ?? {}).company),
+    department: text((record.org ?? {}).department),
+    pocType: text(record.poc_type),
+    amountWan: numberOrNull(record.amount_wan) ?? 0,
+    priority: text(record.priority),
     stageLabel: text(record.stage),
     stage,
     closed,
-    gateComplete,
+    status: text(record.status),
+    stageSince: stageSince === '' ? null : stageSince,
+    daysInStage: daysSince(stageSince === '' ? null : stageSince, now),
     owner: text(record.owner),
+    techOwner: text(record.tech_owner),
+    g0Conclusion: text(gate0.review?.conclusion),
+    g0Passed: text(gate0.review?.conclusion) === '通过',
+    g0Complete: gate0.complete === true,
+    g0MissingCount: missing.length,
+    stageDone,
     dimensions,
     dimensionCount: (['achievement', 'evidence', 'recognition', 'nextMilestone'] as const).filter((key) => dimensions[key]).length,
     gapCount: gaps.length,
     highGapCount: gaps.filter((item) => item.level === 'high').length,
-    lastActivity: activity,
-    daysSinceActivity: daysSince(activity, now),
+    progressCount: progress.length,
+    lastProgressDate: activity,
+    lastProgressSummary: progressSummary(record),
+    daysSinceProgress: daysSince(activity, now),
+    outcomeAchievement: text((record.outcome ?? {}).achievement),
+    outcomeRecognition: text((record.outcome ?? {}).customer_recognition),
   }
 }
 
-/** The four headline counters, computed from the same rows the table shows. */
-function computeStats(projects: ProjectSummary[], gaps: GapItem[]): Stats {
-  const g0Gaps = new Set(
-    gaps.filter((item) => item.rule === 'G0-why-customer' || item.rule === 'G0-why-we' || item.rule === 'G0-tech-owner').map((item) => item.pocId),
-  )
+/**
+ * The v3 headline counters.
+ *
+ * Each one is derived from the same rows the table shows, so the strip and the
+ * table can never disagree.
+ */
+function computeStats(projects: ProjectSummary[]): Stats {
+  let amountTotalWan = 0
+  let awaitingCustomer = 0
+  for (const project of projects) {
+    amountTotalWan += project.amountWan
+  }
   return {
-    active: projects.filter((project) => !project.closed).length,
-    g0Incomplete: g0Gaps.size,
-    atRisk: new Set(gaps.filter((item) => item.level === 'high').map((item) => item.pocId)).size,
-    convertible: projects.filter((project) => project.dimensions.achievement && project.dimensions.evidence && project.dimensions.recognition).length,
     total: projects.length,
-    closed: projects.filter((project) => project.closed).length,
+    g0Passed: projects.filter((project) => project.g0Passed).length,
+    inProgress: projects.filter((project) => project.status === '进行中').length,
+    amountTotalWan,
+    g0Complete: projects.filter((project) => project.g0Complete).length,
+    awaitingCustomer,
+    succeeded: projects.filter(
+      (project) => project.outcomeAchievement === '达成' && project.outcomeRecognition === '认可',
+    ).length,
+    stopped: projects.filter(
+      (project) => project.status === '暂停' || project.status === '已关闭' || project.status === '已取消',
+    ).length,
   }
 }
 
 /** Empty counters for the "no data yet" snapshot. */
 function emptyStats(): Stats {
-  return { active: 0, g0Incomplete: 0, atRisk: 0, convertible: 0, total: 0, closed: 0 }
+  return {
+    total: 0,
+    g0Passed: 0,
+    inProgress: 0,
+    amountTotalWan: 0,
+    g0Complete: 0,
+    awaitingCustomer: 0,
+    succeeded: 0,
+    stopped: 0,
+  }
 }
 
 /** Gap order: severity first, then the highest-value rule, then the project. */
@@ -277,3 +368,6 @@ function compareGaps(left: GapItem, right: GapItem): number {
 function compareProjects(left: ProjectSummary, right: ProjectSummary): number {
   return right.highGapCount - left.highGapCount || right.gapCount - left.gapCount || left.pocId.localeCompare(right.pocId)
 }
+
+/** Re-export the org type so the Client can name it. */
+export type { OrgRecord, StageId }

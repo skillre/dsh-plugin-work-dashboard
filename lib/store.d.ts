@@ -1,21 +1,26 @@
 /**
- * Read-only ledger store.
+ * Read-only ledger store (v3).
  *
  * The store turns the cloned `projects/*.yaml` files into the JSON shapes the
  * Client renders. It never writes: the repository is a read-only copy and the
- * real data source is GitHub (writes arrive in milestone 2, through a PR).
+ * real data source is GitHub.
  *
- * Parsing uses `yaml`'s `parseDocument`, not `parse` + `stringify`: comments and
- * key order survive, which milestone 2 needs when it edits a record in place.
- * One unreadable or unparsable file is reported as a warning and skipped — a
- * single bad hand-edit must not blank the whole board.
+ * v3 is **progress-centred**: a project's state is its identity + gate0 + plan +
+ * progress stream + outcome. The summary therefore reads `gate0` for the G0
+ * verdict, `plan` for focus, `progress` for activity, and `outcome` for the four
+ * dimensions — there is no separate `result` block to reconcile.
+ *
+ * Parsing uses `yaml`'s `parse`. One unreadable or unparsable file is reported
+ * as a warning and skipped: a single bad hand-edit must not blank the whole
+ * board.
  */
 import type { RepoCache } from './repo.js';
-import type { PocRecord, ProjectDetail, Snapshot } from './types.js';
+import type { OrgRecord, PocRecord, ProjectDetail, Snapshot, StageId } from './types.js';
 /** Injected clock so the store stays testable and the rules stay pure. */
 export interface StoreOptions {
     now: () => Date;
-    staleDays: number;
+    /** Days in one stage after which rule 12 fires. */
+    stallDays: number;
 }
 /** The Host-side view model builder. */
 export declare class PocStore {
@@ -31,6 +36,6 @@ export declare class PocStore {
     snapshot(): Promise<Snapshot>;
     /** One project's full record; `null` when no file declares that id. */
     detail(pocId: string): Promise<ProjectDetail | null>;
-    /** `owner/name` as configured; the Client shows it as the data-source label. */
-    private repositoryLabel;
 }
+/** Re-export the org type so the Client can name it. */
+export type { OrgRecord, StageId };

@@ -10,6 +10,7 @@
  * statement that the risk is mild — it is a missing judgement, and putting it
  * at the top would bury the risks someone actually assessed as serious.
  */
+import type { ScanOptions } from './gap.js';
 import type { PocRecord, RiskBoard } from './types.js';
 /** Severity rank: higher sorts first. A blank level ranks below `low`. */
 export declare function riskRank(level: string): number;
@@ -20,4 +21,4 @@ export declare function riskRank(level: string): number;
  * order inside the record — a stable order that does not reshuffle between
  * refreshes.
  */
-export declare function buildRiskBoard(records: readonly PocRecord[]): RiskBoard;
+export declare function buildRiskBoard(records: readonly PocRecord[], options: ScanOptions): RiskBoard;

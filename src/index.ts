@@ -19,12 +19,11 @@ import { resolveConfig, expandHome, remoteUrlFor } from './config.js'
 import type { WorkDashboardConfig } from './config.js'
 import { PocStore } from './store.js'
 import { RepoCache, RepoError, assertSafeCacheRoot } from './repo.js'
-import { buildFormHtml, formFileName, projectForForm } from './form.js'
 import { buildRiskBoard } from './risks.js'
 import { buildGlobalTimeline } from './timeline.js'
 import { createExecuteRoute } from './transport.js'
 import type { ConsoleActions, HostConnection } from './transport.js'
-import type { ExportOutcome, GlobalTimeline, PocRecord, RiskBoard } from './types.js'
+import type { GlobalTimeline, PocRecord, RiskBoard } from './types.js'
 
 export { resolveConfig }
 export { Config } from './config.js'
@@ -62,7 +61,7 @@ export function createRuntime(config: WorkDashboardConfig, options: { home?: str
     cloneTimeoutMs: config.cloneTimeoutMs,
     fetchTimeoutMs: config.fetchTimeoutMs,
   })
-  const store = new PocStore(cache, { now, staleDays: config.staleDays })
+  const store = new PocStore(cache, { now, stallDays: config.stallDays })
 
   let prepared: Promise<void> | null = null
 
@@ -101,47 +100,13 @@ export function createRuntime(config: WorkDashboardConfig, options: { home?: str
       await this.prepare()
       return store.detail(pocId)
     },
-    async exportForm(input): Promise<ExportOutcome> {
-      await this.prepare()
-      if (input.mode === 'blank') {
-        const html = buildFormHtml({ mode: 'blank', projects: [], now: now() })
-        return {
-          html,
-          fileName: formFileName({ mode: 'blank', pocIds: [], now: now() }),
-          pocIds: [],
-          mode: 'blank',
-          bytes: html.length,
-        }
-      }
-      const { records } = await store.load()
-      // Selection order is preserved for the file name, but the form itself
-      // sorts by id so two generations of the same set are identical.
-      const wanted = new Set(input.pocIds)
-      const selected = records.filter((record) => wanted.has(typeof record.poc_id === 'string' ? record.poc_id.trim() : ''))
-      if (selected.length === 0) {
-        throw new RepoError('unknown-project', 'None of the selected projects exist in the ledger; refresh and try again.', {
-          pocIds: input.pocIds.slice(0, 20),
-        })
-      }
-      const projects = selected
-        .map(projectForForm)
-        .sort((left, right) => left.poc_id.localeCompare(right.poc_id))
-      const html = buildFormHtml({ mode: 'fill', projects, now: now() })
-      return {
-        html,
-        fileName: formFileName({ mode: 'fill', pocIds: projects.map((project) => project.poc_id), now: now() }),
-        pocIds: projects.map((project) => project.poc_id),
-        mode: 'fill',
-        bytes: html.length,
-      }
-    },
     async risks(): Promise<RiskBoard> {
       await this.prepare()
-      return buildRiskBoard(await loadOrEmpty())
+      return buildRiskBoard(await loadOrEmpty(), { now: now(), stallDays: config.stallDays })
     },
     async timeline(): Promise<GlobalTimeline> {
       await this.prepare()
-      return buildGlobalTimeline(await loadOrEmpty(), { staleDays: config.staleDays })
+      return buildGlobalTimeline(await loadOrEmpty(), { stallDays: config.stallDays })
     },
   }
 }

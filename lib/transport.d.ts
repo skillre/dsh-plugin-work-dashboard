@@ -11,7 +11,7 @@
  * `{ type: 'server-response', rpcId, result: { ok: true, value } | { ok: false, error } }`
  * out. A non-owner Peer is rejected by Connection before this handler runs.
  */
-import type { ExportOutcome, GlobalTimeline, ProjectDetail, RefreshOutcome, RiskBoard, Snapshot } from './types.js';
+import type { GlobalTimeline, ProjectDetail, RefreshOutcome, RiskBoard, Snapshot } from './types.js';
 /** Path of the exact route, under the shared `/api` channel. */
 export declare const EXECUTE_PATH = "/api/skillre-work-dashboard/execute";
 /** One buffered exact Fetch route as the Connection registry accepts it. */
@@ -38,11 +38,6 @@ export interface ConsoleActions {
     }>;
     /** One project's detail, or `null` when the id is unknown. */
     detail(pocId: string): Promise<ProjectDetail | null>;
-    /** Generate the self-contained HTML form for the selected projects. */
-    exportForm(input: {
-        pocIds: string[];
-        mode: 'fill' | 'blank';
-    }): Promise<ExportOutcome>;
     /** Every project's risks, sorted by severity. */
     risks(): Promise<RiskBoard>;
     /** Every project's rounds, newest first. */
