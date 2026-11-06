@@ -1,0 +1,41 @@
+{
+  "plugin": "@skillre/dsh-plugin-work-dashboard",
+  "version": "0.3.0",
+  "dsh": "0.2.2-rc.1",
+  "verifiedOn": "2026-11-06",
+  "indexUrl": "https://skillre.github.io/dsh-plugin-market/index.json",
+  "installSpec": "git+https://github.com/skillre/dsh-plugin-work-dashboard#164764959d7d6283ef6b1481bd9dd466bb87421f",
+  "commit": "164764959d7d6283ef6b1481bd9dd466bb87421f",
+  "checks": [
+    "live-index-has-entry",
+    "live-index-pins-commit",
+    "dsh --profile poc-market-xoo65l --from-default-profile",
+    "profile-created",
+    "dsh plugin --profile poc-market-xoo65l",
+    "market-spec-installed",
+    "dependency-and-selection",
+    "dsh --profile poc-market-xoo65l --patch",
+    "dump-config",
+    "packed-payload-present",
+    "bounded-startup",
+    "api-list",
+    "api-detail",
+    "api-risks",
+    "api-timeline"
+  ],
+  "summary": {
+    "total": 15,
+    "failed": 0
+  },
+  "cleanup": {
+    "ownedRoot": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-poc-market-install-xoo65l",
+    "processesStopped": true,
+    "rootRemoved": true,
+    "verified": true
+  },
+  "notes": [
+    "Installed the exact spec the live market index generates for this plugin (git+URL#commit), not a local tarball.",
+    "The Git entry is self-contained: lib/ is committed and there is no scripts.prepare, so installation runs no build step.",
+    "The owned profile and its cache were removed afterwards and the removal was verified."
+  ]
+}
