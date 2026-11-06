@@ -4,17 +4,17 @@
   "dsh": "0.2.2-rc.1",
   "verifiedOn": "2026-11-06",
   "indexUrl": "https://skillre.github.io/dsh-plugin-market/index.json",
-  "installSpec": "git+https://github.com/skillre/dsh-plugin-work-dashboard#6e5bf539d6f70c683107ce31fcdf8dbee829124c",
-  "commit": "6e5bf539d6f70c683107ce31fcdf8dbee829124c",
+  "installSpec": "git+https://github.com/skillre/dsh-plugin-work-dashboard#9aed1ef4300ef61ae0ce93d309fc4d6bcb48de70",
+  "commit": "9aed1ef4300ef61ae0ce93d309fc4d6bcb48de70",
   "checks": [
     "live-index-has-entry",
     "live-index-pins-commit",
-    "dsh --profile poc-market-wqxQMj --from-default-profile",
+    "dsh --profile poc-market-7OOwW9 --from-default-profile",
     "profile-created",
-    "dsh plugin --profile poc-market-wqxQMj",
+    "dsh plugin --profile poc-market-7OOwW9",
     "market-spec-installed",
     "dependency-and-selection",
-    "dsh --profile poc-market-wqxQMj --patch",
+    "dsh --profile poc-market-7OOwW9 --patch",
     "dump-config",
     "packed-payload-present",
     "bounded-startup",
@@ -28,7 +28,7 @@
     "failed": 0
   },
   "cleanup": {
-    "ownedRoot": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-poc-market-install-wqxQMj",
+    "ownedRoot": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-poc-market-install-7OOwW9",
     "processesStopped": true,
     "rootRemoved": true,
     "verified": true
