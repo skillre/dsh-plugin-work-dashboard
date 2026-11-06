@@ -4,17 +4,17 @@
   "dsh": "0.2.2-rc.1",
   "verifiedOn": "2026-11-06",
   "indexUrl": "https://skillre.github.io/dsh-plugin-market/index.json",
-  "installSpec": "git+https://github.com/skillre/dsh-plugin-work-dashboard#6e28bb0fbbd5f4e3c801b71e95fad8f459c3481d",
-  "commit": "6e28bb0fbbd5f4e3c801b71e95fad8f459c3481d",
+  "installSpec": "git+https://github.com/skillre/dsh-plugin-work-dashboard#343e7b784f209d221a5cb128451d777eea87daeb",
+  "commit": "343e7b784f209d221a5cb128451d777eea87daeb",
   "checks": [
     "live-index-has-entry",
     "live-index-pins-commit",
-    "dsh --profile poc-market-JkEnqo --from-default-profile",
+    "dsh --profile poc-market-ktWXwH --from-default-profile",
     "profile-created",
-    "dsh plugin --profile poc-market-JkEnqo",
+    "dsh plugin --profile poc-market-ktWXwH",
     "market-spec-installed",
     "dependency-and-selection",
-    "dsh --profile poc-market-JkEnqo --patch",
+    "dsh --profile poc-market-ktWXwH --patch",
     "dump-config",
     "packed-payload-present",
     "bounded-startup",
@@ -28,7 +28,7 @@
     "failed": 0
   },
   "cleanup": {
-    "ownedRoot": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-poc-market-install-JkEnqo",
+    "ownedRoot": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-poc-market-install-ktWXwH",
     "processesStopped": true,
     "rootRemoved": true,
     "verified": true
