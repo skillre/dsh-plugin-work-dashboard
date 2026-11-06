@@ -52,9 +52,16 @@
         "v3-parser",
         "v3-twelve-gap-rules",
         "v3-progress-timeline",
-        "automatic-jsx-runtime"
+        "automatic-jsx-runtime",
+        "live-market-index-entry",
+        "live-market-git-install",
+        "live-market-bounded-startup",
+        "live-market-api-list",
+        "live-market-api-detail",
+        "live-market-api-risks",
+        "live-market-api-timeline"
       ],
-      "notes": "Packed tarball 0.1.0 installed into an owned, disposable, non-Desktop web profile (DSH 0.2.2-rc.1). This release migrates the plugin to the v3 POC data model. The parser reads identity + gate0 + plan + progress[] + outcome; the four dimensions come from `outcome`; the progress stream is a new core view; the gap rule set grew from 8 to 12 (R1-R12); and the stat strip is now POC总数 / G0通过 / 进行中 / 金额合计. The v3 numbers were verified against the real ledger data first: 23 projects, 6050万 total, 1 G0 passed, 0 G0 complete, R1 on all 23, R2 on 7 — matching the update note's acceptance list exactly. dsh --profile <test> --dump-config composed the row; a bounded real startup served the Web app; the authenticated transport exercised the exact /api/skillre-work-dashboard/execute route (cold cache empty, manual refresh cloned the ledger, board computed v3 summaries and gaps, detail returned the progress stream, a second refresh used fetch + reset --hard, unknown project and unauthenticated request failed cleanly), and cleanup removed the owned profile with verified absence. The real DSH Web UI was then driven in headless Chromium: 43/43 assertions passed, including the seven-column v3 table, the amount column, the latest-progress column, the progress-stream section, four separate dimension cards, the twelve-rule pending list, and a new guard that no raw template placeholder reaches the DOM. Two real defects were caught during that verification and fixed: gap TITLES were rendered through t() instead of format() so parameterised titles leaked literal {amountWan}; and the detail identity line still carried the removed v1 {tier} key. The export form is deliberately hidden in this release: it still models v1 fields, and shipping it would hand colleagues YAML the v3 ledger cannot read. It is preserved at src/form.v1-deferred.ts for the P1 rewrite.",
+      "notes": "Packed tarball 0.1.0 installed into an owned, disposable, non-Desktop web profile (DSH 0.2.2-rc.1). This release migrates the plugin to the v3 POC data model. The parser reads identity + gate0 + plan + progress[] + outcome; the four dimensions come from `outcome`; the progress stream is a new core view; the gap rule set grew from 8 to 12 (R1-R12); and the stat strip is now POC总数 / G0通过 / 进行中 / 金额合计. The v3 numbers were verified against the real ledger data first: 23 projects, 6050万 total, 1 G0 passed, 0 G0 complete, R1 on all 23, R2 on 7 — matching the update note's acceptance list exactly. dsh --profile <test> --dump-config composed the row; a bounded real startup served the Web app; the authenticated transport exercised the exact /api/skillre-work-dashboard/execute route (cold cache empty, manual refresh cloned the ledger, board computed v3 summaries and gaps, detail returned the progress stream, a second refresh used fetch + reset --hard, unknown project and unauthenticated request failed cleanly), and cleanup removed the owned profile with verified absence. The real DSH Web UI was then driven in headless Chromium: 43/43 assertions passed, including the seven-column v3 table, the amount column, the latest-progress column, the progress-stream section, four separate dimension cards, the twelve-rule pending list, and a new guard that no raw template placeholder reaches the DOM. Two real defects were caught during that verification and fixed: gap TITLES were rendered through t() instead of format() so parameterised titles leaked literal {amountWan}; and the detail identity line still carried the removed v1 {tier} key. The export form is deliberately hidden in this release: it still models v1 fields, and shipping it would hand colleagues YAML the v3 ledger cannot read. It is preserved at src/form.v1-deferred.ts for the P1 rewrite. The published 0.2.0 market entry was then verified end to end: the LIVE hosted index listed 工作看板 0.2.0, its own install spec (git+https://github.com/skillre/dsh-plugin-work-dashboard#42b7c9f2bf951cdd1715feda48b47bf81286bc0c) was installed into a fresh owned profile, --dump-config composed the row, a bounded startup served the app, and list/detail/risks/timeline all answered (detail correctly reported unknown-project on the cold cache). Cleanup removed the owned profile and verified it was gone.",
       "evidence": [
         "docs/evidence/isolated-mount-0.1.0.json",
         "docs/evidence/ui-verification.json",
@@ -74,7 +81,8 @@
         "tests/form.spec.ts",
         "tests/risks.spec.ts",
         "tests/timeline.spec.ts",
-        "docs/evidence/market-install-0.1.0.json"
+        "docs/evidence/market-install-0.1.0.json",
+        "docs/evidence/market-install-0.2.0.json"
       ]
     }
   ],

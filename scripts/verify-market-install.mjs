@@ -157,6 +157,13 @@ try {
     assert.equal(list.value.cacheReady, false, 'a fresh mount must report an empty cache')
     assert.equal(list.value.repository, 'skillre/workbranch')
     checks.push('api-list')
+    // v3: `detail` carries the progress stream. On a cold cache there is no
+    // project to describe, so the honest answer is the authored unknown-project
+    // failure — not an internal error.
+    const detail = await rpc(origin, cookie, { action: 'detail', pocId: 'POC-000' })
+    assert.equal(detail.ok, false, 'a cold cache cannot describe a project')
+    assert.equal(detail.error.code, 'work-dashboard/unknown-project')
+    checks.push('api-detail')
     const risks = await rpc(origin, cookie, { action: 'risks' })
     assert.equal(risks.ok, true)
     checks.push('api-risks')
