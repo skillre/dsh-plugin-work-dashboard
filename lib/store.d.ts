@@ -15,7 +15,7 @@
  * board.
  */
 import type { RepoCache } from './repo.js';
-import type { OrgRecord, PocRecord, ProjectDetail, Snapshot, StageId } from './types.js';
+import type { GapItem, OrgRecord, PocRecord, PortfolioAnalysis, ProjectDetail, ProjectSummary, Snapshot, StageId } from './types.js';
 /** Injected clock so the store stays testable and the rules stay pure. */
 export interface StoreOptions {
     now: () => Date;
@@ -37,5 +37,27 @@ export declare class PocStore {
     /** One project's full record; `null` when no file declares that id. */
     detail(pocId: string): Promise<ProjectDetail | null>;
 }
+/**
+ * Aggregate the project list into the portfolio band.
+ *
+ * This is the only place the charts get their numbers from. Everything is
+ * derived from `projects` (and the already-scanned `gaps`), so a chart can
+ * never show a figure the table contradicts. Buckets keep their full cardinality
+ * even when empty: a funnel with a missing column reads as a rendering bug.
+ */
+export declare function analyse(projects: ProjectSummary[], gaps: GapItem[]): PortfolioAnalysis;
+/** An empty analysis, for the cold-cache snapshot. */
+export declare function emptyAnalysis(): PortfolioAnalysis;
+/** Build the G0 checklist from the parsed fields. */
+export declare function gate0Checklist(gate0: {
+    whyCustomer: string;
+    whyUs: string;
+    decisionChain: string;
+    postPocDecision: string;
+}, techOwner: string): Array<{
+    field: string;
+    present: boolean;
+    value: string;
+}>;
 /** Re-export the org type so the Client can name it. */
 export type { OrgRecord, StageId };

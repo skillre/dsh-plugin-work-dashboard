@@ -29,14 +29,22 @@ import {
 import type { RepoCache } from './repo.js'
 import { RepoError } from './repo.js'
 import type {
+  AmountRow,
+  DimensionCoverage,
+  DimensionKey,
   GapItem,
+  GapRuleCount,
+  OrgBucket,
   OrgRecord,
   PocRecord,
+  PortfolioAnalysis,
   ProjectDetail,
   ProjectSummary,
   Snapshot,
-  Stats,
+  StageBucket,
   StageId,
+  Stats,
+  TypeBucket,
 } from './types.js'
 
 /** Injected clock so the store stays testable and the rules stay pure. */
@@ -113,6 +121,7 @@ export class PocStore {
         projects: [],
         stats: emptyStats(),
         gaps: [],
+        analysis: emptyAnalysis(),
         warnings: [],
       }
     }
@@ -124,14 +133,16 @@ export class PocStore {
       gaps.push(...scanGaps(record, { now, stallDays: this.options.stallDays }))
     }
     gaps.sort(compareGaps)
+    const sorted = projects.sort(compareProjects)
     return {
       cacheReady: true,
       repository,
       fetchedAt: this.cache.lastFetchedAt,
       cachePath: this.cache.repoPath,
-      projects: projects.sort(compareProjects),
-      stats: computeStats(projects),
+      projects: sorted,
+      stats: computeStats(sorted),
       gaps,
+      analysis: analyse(sorted, gaps),
       warnings,
     }
   }
@@ -168,6 +179,15 @@ export class PocStore {
         reviewedAt: text(gate0.review?.reviewed_at),
         missing,
         complete: gate0.complete === true,
+        checklist: gate0Checklist(
+          {
+            whyCustomer: text(gate0.why_customer),
+            whyUs: text(gate0.why_us),
+            decisionChain: text(gate0.decision_chain),
+            postPocDecision: text(gate0.post_poc_decision),
+          },
+          text(record.tech_owner),
+        ),
       },
       plan: {
         customerPain: text(plan.customer_pain),
@@ -341,8 +361,7 @@ function computeStats(projects: ProjectSummary[]): Stats {
 }
 
 /** Empty counters for the "no data yet" snapshot. */
-function emptyStats(): Stats {
-  return {
+function emptyStats(): Stats {  return {
     total: 0,
     g0Passed: 0,
     inProgress: 0,
@@ -354,8 +373,7 @@ function emptyStats(): Stats {
   }
 }
 
-/** Gap order: severity first, then the highest-value rule, then the project. */
-function compareGaps(left: GapItem, right: GapItem): number {
+/** Gap order: severity first, then the highest-value rule, then the project. */function compareGaps(left: GapItem, right: GapItem): number {
   return (
     right.priority - left.priority ||
     left.ruleNo - right.ruleNo ||
@@ -367,6 +385,167 @@ function compareGaps(left: GapItem, right: GapItem): number {
 /** Project order: the ones needing attention first, then by id. */
 function compareProjects(left: ProjectSummary, right: ProjectSummary): number {
   return right.highGapCount - left.highGapCount || right.gapCount - left.gapCount || left.pocId.localeCompare(right.pocId)
+}
+
+/** The stage buckets in display order, so the funnel always reads G0→G4. */
+const STAGE_ORDER: ReadonlyArray<StageId | 'closed' | 'unknown'> = ['G0', 'G1', 'G2', 'G3', 'G4', 'closed', 'unknown']
+
+/** The four dimensions in display order. */
+const DIMENSION_ORDER: readonly DimensionKey[] = ['achievement', 'evidence', 'recognition', 'nextMilestone']
+
+/** Which stage bucket one project belongs to. */
+function stageBucketOf(project: ProjectSummary): StageId | 'closed' | 'unknown' {
+  if (project.closed) return 'closed'
+  return project.stage ?? 'unknown'
+}
+
+/**
+ * Aggregate the project list into the portfolio band.
+ *
+ * This is the only place the charts get their numbers from. Everything is
+ * derived from `projects` (and the already-scanned `gaps`), so a chart can
+ * never show a figure the table contradicts. Buckets keep their full cardinality
+ * even when empty: a funnel with a missing column reads as a rendering bug.
+ */
+export function analyse(projects: ProjectSummary[], gaps: GapItem[]): PortfolioAnalysis {
+  const totalAmount = projects.reduce((sum, project) => sum + project.amountWan, 0)
+
+  const stageMap = new Map<string, StageBucket>()
+  for (const key of STAGE_ORDER) stageMap.set(key, { key, count: 0, amountWan: 0, highGapCount: 0 })
+  for (const project of projects) {
+    const bucket = stageMap.get(stageBucketOf(project))
+    if (bucket === undefined) continue
+    bucket.count += 1
+    bucket.amountWan += project.amountWan
+    if (project.highGapCount > 0) bucket.highGapCount += 1
+  }
+
+  const orgMap = new Map<string, OrgBucket>()
+  for (const project of projects) {
+    // A project without a company still belongs somewhere: group it under its
+    // system so the breakdown accounts for every project exactly once.
+    const key = `${project.system}\u0000${project.company}`
+    const existing = orgMap.get(key)
+    if (existing === undefined) {
+      orgMap.set(key, {
+        system: project.system,
+        company: project.company,
+        count: 1,
+        amountWan: project.amountWan,
+        highGapCount: project.highGapCount > 0 ? 1 : 0,
+      })
+    } else {
+      existing.count += 1
+      existing.amountWan += project.amountWan
+      if (project.highGapCount > 0) existing.highGapCount += 1
+    }
+  }
+
+  const typeMap = new Map<string, TypeBucket>()
+  for (const project of projects) {
+    const key = project.pocType
+    const existing = typeMap.get(key)
+    if (existing === undefined) {
+      typeMap.set(key, { pocType: key, count: 1, amountWan: project.amountWan })
+    } else {
+      existing.count += 1
+      existing.amountWan += project.amountWan
+    }
+  }
+
+  const gapRuleMap = new Map<GapItem['rule'], GapRuleCount>()
+  for (const item of gaps) {
+    const existing = gapRuleMap.get(item.rule)
+    if (existing === undefined) {
+      gapRuleMap.set(item.rule, { rule: item.rule, ruleNo: item.ruleNo, level: item.level, count: 1 })
+    } else {
+      existing.count += 1
+    }
+  }
+
+  const topAmounts: AmountRow[] = [...projects]
+    .filter((project) => project.amountWan > 0)
+    .sort((left, right) => right.amountWan - left.amountWan || left.pocId.localeCompare(right.pocId))
+    .slice(0, 5)
+    .map((project) => ({
+      pocId: project.pocId,
+      pocName: project.name,
+      amountWan: project.amountWan,
+      share: totalAmount === 0 ? 0 : project.amountWan / totalAmount,
+      stage: project.stage,
+      closed: project.closed,
+    }))
+
+  const dimensions: DimensionCoverage[] = DIMENSION_ORDER.map((key) => {
+    const present = projects.filter((project) => project.dimensions[key]).length
+    const missing = projects.length - present
+    return { key, present, missing, ratio: projects.length === 0 ? 0 : present / projects.length }
+  })
+
+  let lastActivity: string | null = null
+  for (const project of projects) {
+    const date = project.lastProgressDate
+    if (date === null) continue
+    if (lastActivity === null || date > lastActivity) lastActivity = date
+  }
+
+  const largest = topAmounts.length === 0 ? 0 : topAmounts[0]!.amountWan
+
+  return {
+    stages: STAGE_ORDER.map((key) => stageMap.get(key)!),
+    orgs: [...orgMap.values()].sort(
+      (left, right) =>
+        right.amountWan - left.amountWan ||
+        left.system.localeCompare(right.system) ||
+        left.company.localeCompare(right.company),
+    ),
+    types: [...typeMap.values()].sort(
+      (left, right) => right.count - left.count || right.amountWan - left.amountWan || left.pocType.localeCompare(right.pocType),
+    ),
+    topAmounts,
+    dimensions,
+    gapRules: [...gapRuleMap.values()].sort((left, right) => right.count - left.count || left.ruleNo - right.ruleNo),
+    concentration: totalAmount === 0 ? 0 : largest / totalAmount,
+    amountMissing: projects.filter((project) => project.amountWan === 0).length,
+    withProgress: projects.filter((project) => project.progressCount > 0).length,
+    lastActivity,
+  }
+}
+
+/** An empty analysis, for the cold-cache snapshot. */
+export function emptyAnalysis(): PortfolioAnalysis {
+  return {
+    stages: STAGE_ORDER.map((key) => ({ key, count: 0, amountWan: 0, highGapCount: 0 })),
+    orgs: [],
+    types: [],
+    topAmounts: [],
+    dimensions: DIMENSION_ORDER.map((key) => ({ key, present: 0, missing: 0, ratio: 0 })),
+    gapRules: [],
+    concentration: 0,
+    amountMissing: 0,
+    withProgress: 0,
+    lastActivity: null,
+  }
+}
+
+/**
+ * The five G0 prerequisites, in schema order.
+ *
+ * `tech_owner` is one of the five but lives in the identity block, so the
+ * checklist reads it from the record rather than from `gate0`.
+ */
+const G0_FIELDS: ReadonlyArray<{ field: string; viewKey: 'whyCustomer' | 'whyUs' | 'decisionChain' | 'postPocDecision' }> = [
+  { field: 'why_customer', viewKey: 'whyCustomer' },
+  { field: 'why_us', viewKey: 'whyUs' },
+  { field: 'decision_chain', viewKey: 'decisionChain' },
+  { field: 'post_poc_decision', viewKey: 'postPocDecision' },
+]
+
+/** Build the G0 checklist from the parsed fields. */
+export function gate0Checklist(gate0: { whyCustomer: string; whyUs: string; decisionChain: string; postPocDecision: string }, techOwner: string): Array<{ field: string; present: boolean; value: string }> {
+  const items = G0_FIELDS.map(({ field, viewKey }) => ({ field, present: gate0[viewKey] !== '', value: gate0[viewKey] }))
+  items.push({ field: 'tech_owner', present: techOwner !== '', value: techOwner })
+  return items
 }
 
 /** Re-export the org type so the Client can name it. */

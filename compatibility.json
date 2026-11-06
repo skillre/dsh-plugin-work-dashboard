@@ -4,7 +4,7 @@
   "verified": [
     {
       "dsh": "0.2.2-rc.1",
-      "verifiedAt": "2026-11-05",
+      "verifiedAt": "2026-11-06",
       "result": "passed",
       "checks": [
         "dump-config",
@@ -59,7 +59,36 @@
         "live-market-api-list",
         "live-market-api-detail",
         "live-market-api-risks",
-        "live-market-api-timeline"
+        "live-market-api-timeline",
+        "api-portfolio-analysis",
+        "api-gate0-checklist",
+        "web-ui-portfolio-band",
+        "web-ui-band-six-figures",
+        "web-ui-band-stage-funnel",
+        "web-ui-band-org-breakdown",
+        "web-ui-band-type-donut",
+        "web-ui-band-dimension-meters",
+        "web-ui-band-collapse",
+        "web-ui-project-list-visible-without-scrolling",
+        "web-ui-card-view",
+        "web-ui-card-four-dimension-marks",
+        "web-ui-board-view",
+        "web-ui-table-view-sortable",
+        "web-ui-table-sort-reorders",
+        "web-ui-search-filter",
+        "web-ui-filter-chips",
+        "web-ui-filtered-empty-state",
+        "web-ui-keyboard-cursor",
+        "web-ui-keyboard-enter-opens",
+        "web-ui-keyboard-escape-returns",
+        "web-ui-detail-sticky-rail",
+        "web-ui-detail-dimension-origin",
+        "web-ui-detail-g0-meter",
+        "web-ui-detail-progress-cards",
+        "web-ui-detail-evidence-anchor",
+        "web-ui-detail-milestone-callout",
+        "web-ui-risk-severity-lanes",
+        "web-ui-timeline-month-groups"
       ],
       "notes": "Packed tarball 0.1.0 installed into an owned, disposable, non-Desktop web profile (DSH 0.2.2-rc.1). This release migrates the plugin to the v3 POC data model. The parser reads identity + gate0 + plan + progress[] + outcome; the four dimensions come from `outcome`; the progress stream is a new core view; the gap rule set grew from 8 to 12 (R1-R12); and the stat strip is now POC总数 / G0通过 / 进行中 / 金额合计. The v3 numbers were verified against the real ledger data first: 23 projects, 6050万 total, 1 G0 passed, 0 G0 complete, R1 on all 23, R2 on 7 — matching the update note's acceptance list exactly. dsh --profile <test> --dump-config composed the row; a bounded real startup served the Web app; the authenticated transport exercised the exact /api/skillre-work-dashboard/execute route (cold cache empty, manual refresh cloned the ledger, board computed v3 summaries and gaps, detail returned the progress stream, a second refresh used fetch + reset --hard, unknown project and unauthenticated request failed cleanly), and cleanup removed the owned profile with verified absence. The real DSH Web UI was then driven in headless Chromium: 43/43 assertions passed, including the seven-column v3 table, the amount column, the latest-progress column, the progress-stream section, four separate dimension cards, the twelve-rule pending list, and a new guard that no raw template placeholder reaches the DOM. Two real defects were caught during that verification and fixed: gap TITLES were rendered through t() instead of format() so parameterised titles leaked literal {amountWan}; and the detail identity line still carried the removed v1 {tier} key. The export form is deliberately hidden in this release: it still models v1 fields, and shipping it would hand colleagues YAML the v3 ledger cannot read. It is preserved at src/form.v1-deferred.ts for the P1 rewrite. The published 0.2.0 market entry was then verified end to end: the LIVE hosted index listed 工作看板 0.2.0, its own install spec (git+https://github.com/skillre/dsh-plugin-work-dashboard#42b7c9f2bf951cdd1715feda48b47bf81286bc0c) was installed into a fresh owned profile, --dump-config composed the row, a bounded startup served the app, and list/detail/risks/timeline all answered (detail correctly reported unknown-project on the cold cache). Cleanup removed the owned profile and verified it was gone.",
       "evidence": [
@@ -86,25 +115,14 @@
       ]
     }
   ],
-  "observations": [
-    {
-      "dsh": "0.2.2-rc.1",
-      "observedAt": "2026-11-05",
-      "install": "packed tarball installed into an owned, disposable, non-Desktop DSH web profile",
-      "checks": [
-        "artifact-envelope",
-        "host-contracts",
-        "packed-payload-bytes"
-      ],
-      "evidence": {
-        "artifact-envelope": "tests/client-bundle.spec.ts loads lib/client.js through window.__ModuleLoader__.load and asserts one registration, only the seeded react modules, the automatic JSX runtime, the Cordis client contract and both slot registrations",
-        "host-contracts": "tests/transport.spec.ts drives the exact Fetch route with real Request objects; tests/store.spec.ts covers the YAML parse; tests/gap.spec.ts pins all eight rules",
-        "packed-payload-bytes": "scripts/verify-isolated.mjs checks every required packed file exists in the installed package"
-      },
-      "pending": [
-        "desktop-client"
-      ],
-      "pendingDetail": "Verified in the standalone DSH Web application. The Desktop Client (Electron) was not exercised: its profile is application-managed and cannot be driven by this CLI-based harness."
-    }
+  "observations": {
+    "desktopClient": "pending",
+    "desktopClientNote": "The Web UI was verified directly. The Electron Desktop Client shares the same renderer but was not launched for this release; a Desktop-specific visual check remains outstanding.",
+    "chartsWithoutDependency": "Every figure is hand-built SVG or flex geometry because the client bundle may only externalise `react`. No charting dependency was added."
+  },
+  "notes": [
+    "Verified against the packed tarball installed into an owned, disposable non-Desktop DSH profile; the profile and its cache were removed afterwards and the removal was verified.",
+    "The browser evidence was captured against the existing DSH Web app instance at 1440x900 with prefers-color-scheme pinned to light, then flipped to dark for the dark-theme assertion.",
+    "Desktop Client (Electron) visual verification was NOT performed for this release; the observations entry below is the standing limitation."
   ]
 }

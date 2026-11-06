@@ -20,6 +20,31 @@ const SNAPSHOT: Snapshot = {
   projects: [],
   stats: { total: 0, g0Passed: 0, inProgress: 0, amountTotalWan: 0, g0Complete: 0, awaitingCustomer: 0, succeeded: 0, stopped: 0 },
   gaps: [],
+  analysis: {
+    stages: [
+      { key: 'G0', count: 0, amountWan: 0, highGapCount: 0 },
+      { key: 'G1', count: 0, amountWan: 0, highGapCount: 0 },
+      { key: 'G2', count: 0, amountWan: 0, highGapCount: 0 },
+      { key: 'G3', count: 0, amountWan: 0, highGapCount: 0 },
+      { key: 'G4', count: 0, amountWan: 0, highGapCount: 0 },
+      { key: 'closed', count: 0, amountWan: 0, highGapCount: 0 },
+      { key: 'unknown', count: 0, amountWan: 0, highGapCount: 0 },
+    ],
+    orgs: [],
+    types: [],
+    topAmounts: [],
+    dimensions: [
+      { key: 'achievement', present: 0, missing: 0, ratio: 0 },
+      { key: 'evidence', present: 0, missing: 0, ratio: 0 },
+      { key: 'recognition', present: 0, missing: 0, ratio: 0 },
+      { key: 'nextMilestone', present: 0, missing: 0, ratio: 0 },
+    ],
+    gapRules: [],
+    concentration: 0,
+    amountMissing: 0,
+    withProgress: 0,
+    lastActivity: null,
+  },
   warnings: [],
 }
 
@@ -42,16 +67,6 @@ function actions(overrides: Partial<ConsoleActions> = {}): () => Promise<Console
       return { snapshot: SNAPSHOT, outcome: { mode: 'clone' as const, durationMs: 1234, finishedAt: '2026-11-05T04:00:00.000Z' } }
     },
     async detail(pocId: string) { return pocId === 'POC-2026-001' ? DETAIL : null },
-    async validate(input: { pocId: string | null; source: string; fileName: string; intent: 'import' | 'create' }) {
-      return { report: { ok: true, pocId: input.pocId ?? 'POC-2026-009', name: 'X', exists: false, findings: [], warnings: [] }, diff: { entries: [], notes: [] } }
-    },
-    async submit() {
-      return { branch: 'import/POC-2026-001-20261105', commit: 'abc', prUrl: 'https://github.com/skillre/workbranch/pull/1', prNumber: 1, mode: 'import' as const, durationMs: 10 }
-    },
-    async template(input: { pocId: string; name: string }) { return { pocId: input.pocId, source: `poc_id: ${input.pocId}` } },
-    async exportForm(input: { pocIds: string[]; mode: 'fill' | 'blank' }) {
-      return { html: '<html></html>', fileName: 'form.html', pocIds: input.pocIds, mode: input.mode, bytes: 13 }
-    },
     async risks() { return { rows: [], counts: { high: 0, medium: 0, low: 0, unset: 0, total: 0 }, projectsWithRisks: 0, projectsTotal: 0 } },
     async timeline() { return { entries: [], range: null, months: [], silentProjects: [] } },
     ...overrides,

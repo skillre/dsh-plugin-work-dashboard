@@ -19,7 +19,13 @@ import {
   DEFAULT_CUSTOM_MINUTES,
   REFRESH_INTERVAL_KEY,
   REFRESH_INTERVALS,
+  SORT_KEY_KEY,
+  SORT_KEYS,
+  VIEW_MODE_KEY,
+  VIEW_MODES,
   type RefreshInterval,
+  type SortKey,
+  type ViewMode,
 } from '../types.js'
 
 /** One resolved cadence: what the timer effect needs, nothing more. */
@@ -101,5 +107,46 @@ export function intervalMs(preference: RefreshPreference): number | null {
       return 60 * 60_000
     case 'custom':
       return clampMinutes(preference.customMinutes) * 60_000
+  }
+}
+
+/** The stored overview layout: which view mode, and how the list is sorted. */
+export interface ViewPreference {
+  viewMode: ViewMode
+  sortKey: SortKey
+}
+
+/** The documented default: cards, ordered by what needs attention. */
+export const DEFAULT_VIEW_PREFERENCE: ViewPreference = { viewMode: 'cards', sortKey: 'attention' }
+
+/** Accept only a declared view mode; anything else is the default. */
+export function parseViewMode(raw: string | null | undefined): ViewMode {
+  const value = (raw ?? '').trim()
+  return (VIEW_MODES as readonly string[]).includes(value) ? (value as ViewMode) : DEFAULT_VIEW_PREFERENCE.viewMode
+}
+
+/** Accept only a declared sort key; anything else is the default. */
+export function parseSortKey(raw: string | null | undefined): SortKey {
+  const value = (raw ?? '').trim()
+  return (SORT_KEYS as readonly string[]).includes(value) ? (value as SortKey) : DEFAULT_VIEW_PREFERENCE.sortKey
+}
+
+/** Read the stored view preference, falling back to the default on anything odd. */
+export function readViewPreference(storage: StorageLike = browserStorage()): ViewPreference {
+  if (storage === undefined) return { ...DEFAULT_VIEW_PREFERENCE }
+  return {
+    viewMode: parseViewMode(storage.getItem(VIEW_MODE_KEY)),
+    sortKey: parseSortKey(storage.getItem(SORT_KEY_KEY)),
+  }
+}
+
+/** Persist the view preference; a blocked or full storage degrades silently. */
+export function writeViewPreference(preference: ViewPreference, storage: StorageLike = browserStorage()): void {
+  if (storage === undefined) return
+  try {
+    storage.setItem(VIEW_MODE_KEY, preference.viewMode)
+    storage.setItem(SORT_KEY_KEY, preference.sortKey)
+  } catch {
+    // Losing the layout preference costs one click, not the board.
   }
 }

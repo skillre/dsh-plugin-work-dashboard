@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Work Dashboard",
-    "description": "A multi-module operations dashboard. POC Operations is the first module: progress-stream timeline, four-dimension result, stage rail, the twelve gap rules, a risk board and a global timeline, on the v3 data model."
+    "description": "A multi-module operations dashboard. POC Operations is the first module: a portfolio band, cards/board/table readings of the project list, a progress-stream detail page, the twelve gap rules, a risk board and a global timeline, on the v3 data model."
   }
 }

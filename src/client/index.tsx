@@ -18,7 +18,7 @@ import type { ClientApi } from './api.js'
 import type { ClientContext, Disposer } from './contracts.js'
 import { en, NAMESPACE, zh } from './text.js'
 import type { Translate } from './text.js'
-import { WorkDashboardPage, SidebarGlyph } from './view.jsx'
+import { WorkDashboardPage, SidebarGlyph } from './shell.jsx'
 import { PANEL_ID } from '../types.js'
 
 /** Services this module cannot run without. */

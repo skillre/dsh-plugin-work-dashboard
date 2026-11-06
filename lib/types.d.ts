@@ -35,6 +35,21 @@ export type StageId = (typeof STAGES)[number];
 /** The four dimensions that must be tracked separately, never merged. */
 export declare const DIMENSIONS: readonly ["achievement", "evidence", "recognition", "nextMilestone"];
 export type DimensionKey = (typeof DIMENSIONS)[number];
+/**
+ * How the overview renders the same project list.
+ *
+ * One dataset, three readings: `cards` answers "what needs me", `board` answers
+ * "where is everything sitting", `table` answers "show me the numbers". Switching
+ * never refetches and never drops the active filters.
+ */
+export declare const VIEW_MODES: readonly ["cards", "board", "table"];
+export type ViewMode = (typeof VIEW_MODES)[number];
+/** The overview's sort orders. */
+export declare const SORT_KEYS: readonly ["attention", "amount", "progress", "stage"];
+export type SortKey = (typeof SORT_KEYS)[number];
+/** Browser-local view preference key (search/filters are session-only). */
+export declare const VIEW_MODE_KEY = "work-dashboard.viewMode";
+export declare const SORT_KEY_KEY = "work-dashboard.sortKey";
 /** Every gap rule id this plugin knows. */
 export declare const GAP_RULES: readonly ["R1-gate0-missing", "R2-large-amount-no-g0", "R3-g0-passed-no-plan", "R4-criteria-count", "R5-scenarios-count", "R6-risks-overflow", "R7-g2-not-ready", "R8-progress-no-evidence", "R9-evidence-no-recognition", "R10-g3-1-without-g3-2", "R11-no-next-milestone", "R12-stage-stalled"];
 export type GapRule = (typeof GAP_RULES)[number];
@@ -277,6 +292,90 @@ export interface Stats {
     /** `status === '暂停' | '已关闭' | '已取消'`. */
     stopped: number;
 }
+/** One stage column of the funnel: how many projects, and how much money. */
+export interface StageBucket {
+    /** `G0`..`G4`, or `closed` for the terminal state. */
+    key: StageId | 'closed' | 'unknown';
+    /** Projects whose current stage is this bucket. */
+    count: number;
+    /** Summed `amount_wan` of those projects. */
+    amountWan: number;
+    /** Projects in this bucket that still carry a high-severity gap. */
+    highGapCount: number;
+}
+/** One row of the 体系 / 公司 breakdown. */
+export interface OrgBucket {
+    /** `org.system`, or `''` when unset. */
+    system: string;
+    /** `org.company`, or `''` when unset. */
+    company: string;
+    count: number;
+    amountWan: number;
+    /** Projects under this company carrying at least one high gap. */
+    highGapCount: number;
+}
+/** One row of the `poc_type` composition. */
+export interface TypeBucket {
+    pocType: string;
+    count: number;
+    amountWan: number;
+}
+/** One bar of the amount-concentration list. */
+export interface AmountRow {
+    pocId: string;
+    pocName: string;
+    amountWan: number;
+    /** Share of the portfolio total, `0..1`. */
+    share: number;
+    stage: StageId | null;
+    closed: boolean;
+}
+/** Coverage of one of the four dimensions across the portfolio. */
+export interface DimensionCoverage {
+    key: DimensionKey;
+    /** Projects where the dimension is present. */
+    present: number;
+    /** Projects where it is missing. */
+    missing: number;
+    /** `present / total`, `0..1`; `0` when there are no projects. */
+    ratio: number;
+}
+/** How often one gap rule fires across the portfolio. */
+export interface GapRuleCount {
+    rule: GapRule;
+    ruleNo: number;
+    level: GapLevel;
+    count: number;
+}
+/**
+ * The portfolio analysis the overview band renders.
+ *
+ * Every number here is a pure aggregation of the same `projects` rows the
+ * table shows, so the charts and the list can never disagree. It is computed
+ * once on the Host and shipped as JSON; the Client never re-derives it.
+ */
+export interface PortfolioAnalysis {
+    /** Stage funnel, in G0→G4→closed order. */
+    stages: StageBucket[];
+    /** 体系/公司 breakdown, biggest amount first. */
+    orgs: OrgBucket[];
+    /** `poc_type` composition, biggest count first. */
+    types: TypeBucket[];
+    /** Largest projects by amount, biggest first (at most 5). */
+    topAmounts: AmountRow[];
+    /** The four dimensions in `DIMENSIONS` order. */
+    dimensions: DimensionCoverage[];
+    /** Gap rules that fired at least once, most frequent first. */
+    gapRules: GapRuleCount[];
+    /** Amount held by the largest single project, `0..1` of the total. */
+    concentration: number;
+    /** Projects with no amount recorded. */
+    amountMissing: number;
+    /** Projects with at least one progress entry. */
+    withProgress: number;
+    /** Newest progress date across the portfolio, or `null`. */
+    lastActivity: string | null;
+}
 /** Everything the overview page renders. */
 export interface Snapshot {
     /** `true` once a clone exists and parsed without a fatal error. */
@@ -290,6 +389,8 @@ export interface Snapshot {
     projects: ProjectSummary[];
     stats: Stats;
     gaps: GapItem[];
+    /** Aggregated portfolio view; empty buckets when there are no projects. */
+    analysis: PortfolioAnalysis;
     /** Non-fatal findings: unreadable files, unparsable YAML, duplicates. */
     warnings: string[];
 }
@@ -336,6 +437,15 @@ export interface OutcomeView {
     overall: string;
     reviewedAt: string;
 }
+/** One G0 prerequisite, resolved for the completeness meter. */
+export interface Gate0CheckItem {
+    /** The YAML field name, e.g. `why_customer`. */
+    field: string;
+    /** `true` when the field carries content. */
+    present: boolean;
+    /** The field's current text, or `''`. */
+    value: string;
+}
 /** The G0 block as the detail page receives it. */
 export interface Gate0View {
     whyCustomer: string;
@@ -348,6 +458,14 @@ export interface Gate0View {
     reviewedAt: string;
     missing: string[];
     complete: boolean;
+    /**
+     * The five G0 prerequisites in schema order, each with its own presence flag.
+     *
+     * v3 counts `tech_owner` as one of the five, and it lives in the identity
+     * block rather than under `gate0`, so the meter cannot be derived from
+     * `gate0.missing` alone without losing that row.
+     */
+    checklist: Gate0CheckItem[];
 }
 /** The plan block as the detail page receives it. */
 export interface PlanView {

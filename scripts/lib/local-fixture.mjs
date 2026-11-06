@@ -319,6 +319,190 @@ outcome:
   reviewed_at: 2026-11-01
 `,
 
+
+  // A v3 project with an amount that crosses the R2 threshold and NO progress:
+  // exercises the funnel's "stalled at intake" state and the amount-concentration
+  // bar at the top of the list.
+  'POC-2026-004.yaml': `poc_id: POC-2026-004
+name: 某某保险集团数据安全治理
+org:
+  system: 国寿体系
+  company: 国寿股份
+  department: 数据管理部
+amount_wan: 500
+poc_type: 保护AI
+priority: high
+owner: 郑十
+sales: 冯一
+tech_owner: 陈工
+exec_sponsor: 黄总
+stage: G1-方案设计
+status: 进行中
+stage_since: 2026-06-01
+gate0:
+  why_customer: 集团要做数据分类分级，需要验证 AI 辅助识别的准确率
+  why_us: 数据安全是国寿体系的年度重点，成功可复制到 5 家子公司
+  decision_chain: 数据管理部提需求，集团 IT 审批
+  post_poc_decision: 立项采购
+  competitor: 厂商B
+  review:
+    conclusion: 通过
+    reviewer: 杨闯
+    reviewed_at: 2026-06-20
+  missing: []
+  complete: true
+plan:
+  customer_pain: 人工分类效率低，覆盖不全
+  expected_recognition: 数据管理部书面认可识别准确率
+  criteria:
+    - name: 识别准确率达到 92%
+      metric: 准确率
+      baseline: '78%'
+      target: '>=92%'
+    - name: 覆盖 10 个业务系统
+      metric: 覆盖系统数
+      baseline: null
+      target: '10'
+  scenarios:
+    - 核心业务库分类
+    - 历史归档数据识别
+    - 第三方数据交换
+  our_edge: 预训练模型 + 行业语料
+  timeline:
+    start: 2026-06-01
+    end: 2026-09-30
+  risks: []
+  report_nodes:
+    - 中期汇报
+  gate1:
+    conclusion: 通过
+    reviewed_at: 2026-07-01
+  gate2:
+    ready: 未就绪
+    checked_at: null
+    prerequisites: []
+progress: []
+outcome:
+  achievement: null
+  customer_recognition: null
+  our_proof: null
+  remaining_risks: null
+  conclusion:
+    proved: null
+    recognized: null
+    next_business: null
+  business:
+    milestone: null
+    owner: null
+    deadline: null
+    status: null
+  overall: null
+  reviewed_at: null
+`,
+
+  // A closed project with no amount: exercises the closed funnel bucket, the
+  // "no amount" note, and the table's em-dash amount cell.
+  'POC-2026-005.yaml': `poc_id: POC-2026-005
+name: 某某银行云桌面替代验证
+org:
+  system: 人保体系
+  company: 人保科技
+  department: 基础架构部
+amount_wan: 0
+poc_type: 虚拟化
+priority: normal
+owner: 钱二
+sales: 林鹤
+tech_owner: 周工
+exec_sponsor: null
+stage: closed
+status: 已关闭
+stage_since: 2026-05-01
+gate0:
+  why_customer: 验证云桌面能否替代传统 PC
+  why_us: 虚拟化是长期品类
+  decision_chain: 基础架构部
+  post_poc_decision: 暂缓
+  competitor: null
+  review:
+    conclusion: 通过
+    reviewer: 杨闯
+    reviewed_at: 2026-05-10
+  missing: []
+  complete: true
+plan:
+  customer_pain: 终端运维成本高
+  expected_recognition: null
+  criteria:
+    - name: 单节点 200 并发
+      metric: 并发数
+      baseline: null
+      target: '200'
+  scenarios:
+    - 办公终端
+  our_edge: 瘦终端成本
+  timeline:
+    start: 2026-05-01
+    end: 2026-06-30
+  risks:
+    - name: 客户预算冻结
+      level: high
+      mitigation: 等下一财年
+    - name: 现有终端兼容性
+      level: medium
+      mitigation: 兼容性清单
+    - name: 运维团队能力
+      level: low
+      mitigation: 培训
+    - name: 网络带宽
+      level: medium
+      mitigation: 带宽评估
+  report_nodes: []
+  gate1:
+    conclusion: 不通过
+    reviewed_at: 2026-05-20
+  gate2:
+    ready: 未就绪
+    checked_at: null
+    prerequisites: []
+progress:
+  - seq: 1
+    date: 2026-05-15
+    type: Checkpoint
+    goal: 验证并发能力
+    items:
+      - 办公终端
+    actual: 压测未达 200 并发
+    completion: '40%'
+    evidence: []
+    customer:
+      synced_with: 周工
+      feedback: 暂缓
+      recognition: 未认可
+    gate3_1: 可证明
+    gate3_2: 待确认
+    next:
+      goal: ''
+      owner: ''
+      deadline: ''
+outcome:
+  achievement: 未达成
+  customer_recognition: 未认可
+  our_proof: null
+  remaining_risks: 预算冻结
+  conclusion:
+    proved: null
+    recognized: null
+    next_business: 等下一财年
+  business:
+    milestone: null
+    owner: null
+    deadline: null
+    status: null
+  overall: 暂缓
+  reviewed_at: 2026-06-30
+`,
+
 }
 
 /**

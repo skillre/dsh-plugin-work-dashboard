@@ -324,6 +324,95 @@ describe('snapshot', () => {
     expect(snapshot).toMatchObject({ cacheReady: false, projects: [], gaps: [], warnings: [] })
     expect(snapshot.stats.total).toBe(0)
     expect(snapshot.cachePath).toBe(repoPath)
+    // The band still gets a full-shaped analysis, so a cold cache renders the
+    // same skeleton as a populated one instead of a different page.
+    expect(snapshot.analysis.stages.map((bucket) => bucket.key)).toEqual(['G0', 'G1', 'G2', 'G3', 'G4', 'closed', 'unknown'])
+    expect(snapshot.analysis.stages.every((bucket) => bucket.count === 0)).toBe(true)
+    expect(snapshot.analysis.dimensions).toHaveLength(4)
+  })
+})
+
+describe('portfolio analysis', () => {
+  it('buckets every project into exactly one stage, in funnel order', async () => {
+    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
+    const snapshot = await store.snapshot()
+    const stages = snapshot.analysis.stages
+    expect(stages.map((bucket) => bucket.key)).toEqual(['G0', 'G1', 'G2', 'G3', 'G4', 'closed', 'unknown'])
+    // Every project appears exactly once, so the funnel total equals the ledger.
+    expect(stages.reduce((sum, bucket) => sum + bucket.count, 0)).toBe(snapshot.projects.length)
+    expect(stages.find((bucket) => bucket.key === 'G2')?.count).toBe(1)
+    expect(stages.find((bucket) => bucket.key === 'G0')?.count).toBe(1)
+    expect(stages.find((bucket) => bucket.key === 'G4')?.count).toBe(1)
+    // Amounts are bucketed with the same project set, so they sum to the total.
+    expect(stages.reduce((sum, bucket) => sum + bucket.amountWan, 0)).toBe(2600)
+  })
+
+  it('groups the org breakdown by system + company, largest amount first', async () => {
+    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
+    const snapshot = await store.snapshot()
+    const orgs = snapshot.analysis.orgs
+    expect(orgs).toHaveLength(3)
+    expect(orgs[0]).toMatchObject({ system: '人保体系', company: '人保财险', count: 1, amountWan: 1500 })
+    expect(orgs.map((row) => row.amountWan)).toEqual([1500, 800, 300])
+    expect(orgs.reduce((sum, row) => sum + row.count, 0)).toBe(3)
+  })
+
+  it('ranks the amount concentration list and reports the share', async () => {
+    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
+    const snapshot = await store.snapshot()
+    const top = snapshot.analysis.topAmounts
+    expect(top.map((row) => row.amountWan)).toEqual([1500, 800, 300])
+    expect(top[0]!.share).toBeCloseTo(1500 / 2600, 5)
+    expect(snapshot.analysis.concentration).toBeCloseTo(1500 / 2600, 5)
+    expect(snapshot.analysis.amountMissing).toBe(0)
+  })
+
+  it('counts dimension coverage across the portfolio', async () => {
+    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
+    const snapshot = await store.snapshot()
+    const byKey = new Map(snapshot.analysis.dimensions.map((row) => [row.key, row]))
+    // achievement: POC-001 部分达成 and POC-003 达成, POC-002 empty.
+    expect(byKey.get('achievement')?.present).toBe(2)
+    expect(byKey.get('achievement')?.missing).toBe(1)
+    // nextMilestone: only POC-001 has business.milestone.
+    expect(byKey.get('nextMilestone')?.present).toBe(1)
+    expect(byKey.get('nextMilestone')?.ratio).toBeCloseTo(1 / 3, 5)
+  })
+
+  it('counts gap-rule hits and the activity counters', async () => {
+    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
+    const snapshot = await store.snapshot()
+    const rules = snapshot.analysis.gapRules
+    // The list is ordered by how often a rule fires, so the most systemic
+    // problem is the first thing the band shows.
+    expect(rules.length).toBeGreaterThan(0)
+    for (let index = 1; index < rules.length; index += 1) {
+      expect(rules[index - 1]!.count).toBeGreaterThanOrEqual(rules[index]!.count)
+    }
+    const totalFired = rules.reduce((sum, row) => sum + row.count, 0)
+    expect(totalFired).toBe(snapshot.gaps.length)
+    expect(snapshot.analysis.withProgress).toBe(2)
+    expect(snapshot.analysis.lastActivity).toBe('2026-11-01')
+  })
+})
+
+describe('G0 checklist', () => {
+  it('lists the five prerequisites with their own presence flags', async () => {
+    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
+    const detail = await store.detail('POC-2026-002')
+    expect(detail!.gate0.checklist.map((item) => item.field)).toEqual([
+      'why_customer', 'why_us', 'decision_chain', 'post_poc_decision', 'tech_owner',
+    ])
+    expect(detail!.gate0.checklist.every((item) => item.present === false)).toBe(true)
+    expect(detail!.gate0.checklist.every((item) => item.value === '')).toBe(true)
+  })
+
+  it('reads tech_owner from the identity block, not from gate0', async () => {
+    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
+    const detail = await store.detail('POC-2026-001')
+    const tech = detail!.gate0.checklist.find((item) => item.field === 'tech_owner')
+    expect(tech).toMatchObject({ present: true, value: '王工' })
+    expect(detail!.gate0.checklist.every((item) => item.present)).toBe(true)
   })
 })
 

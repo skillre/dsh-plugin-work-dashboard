@@ -11,7 +11,7 @@
  * quota error) must still render the console, so every write is best-effort and
  * every read falls back to the documented default: manual refresh only.
  */
-import { type RefreshInterval } from '../types.js';
+import { type RefreshInterval, type SortKey, type ViewMode } from '../types.js';
 /** One resolved cadence: what the timer effect needs, nothing more. */
 export interface RefreshPreference {
     interval: RefreshInterval;
@@ -39,3 +39,18 @@ export declare function writePreference(preference: RefreshPreference, storage?:
  * and the settings dialog can never disagree about "every 10 minutes".
  */
 export declare function intervalMs(preference: RefreshPreference): number | null;
+/** The stored overview layout: which view mode, and how the list is sorted. */
+export interface ViewPreference {
+    viewMode: ViewMode;
+    sortKey: SortKey;
+}
+/** The documented default: cards, ordered by what needs attention. */
+export declare const DEFAULT_VIEW_PREFERENCE: ViewPreference;
+/** Accept only a declared view mode; anything else is the default. */
+export declare function parseViewMode(raw: string | null | undefined): ViewMode;
+/** Accept only a declared sort key; anything else is the default. */
+export declare function parseSortKey(raw: string | null | undefined): SortKey;
+/** Read the stored view preference, falling back to the default on anything odd. */
+export declare function readViewPreference(storage?: StorageLike): ViewPreference;
+/** Persist the view preference; a blocked or full storage degrades silently. */
+export declare function writeViewPreference(preference: ViewPreference, storage?: StorageLike): void;

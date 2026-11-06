@@ -12,7 +12,7 @@
  * therefore read `progress[progress.length - 1]`, and rule 7 compares "has any
  * progress" against the G2 readiness flag.
  */
-import type { GapItem, PocRecord, StageId } from './types.js';
+import type { GapItem, GapLevel, PocRecord, StageId } from './types.js';
 /** Normalize the free-form `stage` string onto a stage id. */
 export declare function normalizeStage(raw: unknown): {
     stage: StageId | null;
@@ -31,6 +31,12 @@ export interface ScanOptions {
     /** Days in one stage after which rule 12 fires. */
     stallDays: number;
 }
+/** Rule metadata: number, severity and sort weight. */
+export declare const RULE_META: Record<GapItem['rule'], {
+    no: number;
+    level: GapLevel;
+    priority: number;
+}>;
 /** The four dimensions, resolved from the v3 `outcome` block. */
 export declare function readDimensions(poc: PocRecord): {
     achievement: boolean;

@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { WorkDashboardPage } from '../src/client/view.jsx'
+import { WorkDashboardPage } from '../src/client/shell.jsx'
 import type { ClientApi } from '../src/client/api.js'
 import type { ClientLocaleLike } from '../src/client/contracts.js'
 import { dictFor, format } from '../src/client/text.js'
-import type { PocRecord, ProgressView, ProjectDetail, ProjectSummary, Snapshot } from '../src/types.js'
+import type { PocRecord, PortfolioAnalysis, ProgressView, ProjectDetail, ProjectSummary, Snapshot } from '../src/types.js'
 
 /**
  * Console page tests.
@@ -76,6 +76,50 @@ function summary(overrides: Partial<ProjectSummary> = {}): ProjectSummary {
   }
 }
 
+/** The portfolio analysis the band renders, derived from the same three projects. */
+function analysis(): PortfolioAnalysis {
+  return {
+    stages: [
+      { key: 'G0', count: 1, amountWan: 300, highGapCount: 1 },
+      { key: 'G1', count: 0, amountWan: 0, highGapCount: 0 },
+      { key: 'G2', count: 1, amountWan: 1500, highGapCount: 2 },
+      { key: 'G3', count: 0, amountWan: 0, highGapCount: 0 },
+      { key: 'G4', count: 1, amountWan: 800, highGapCount: 1 },
+      { key: 'closed', count: 0, amountWan: 0, highGapCount: 0 },
+      { key: 'unknown', count: 0, amountWan: 0, highGapCount: 0 },
+    ],
+    orgs: [
+      { system: '人保体系', company: '人保财险', count: 1, amountWan: 1500, highGapCount: 1 },
+      { system: '人保体系', company: '人保寿险', count: 1, amountWan: 800, highGapCount: 1 },
+      { system: '国寿体系', company: '国寿财险', count: 1, amountWan: 300, highGapCount: 1 },
+    ],
+    types: [
+      { pocType: '大体量项目', count: 1, amountWan: 1500 },
+      { pocType: 'SDL', count: 1, amountWan: 300 },
+      { pocType: 'AI安全', count: 1, amountWan: 800 },
+    ],
+    topAmounts: [
+      { pocId: 'POC-2026-001', pocName: '某某银行零信任试点', amountWan: 1500, share: 1500 / 2600, stage: 'G2', closed: false },
+      { pocId: 'POC-2026-003', pocName: '某某制造产线安全接入', amountWan: 800, share: 800 / 2600, stage: 'G4', closed: false },
+      { pocId: 'POC-2026-002', pocName: '某某集团办公网改造', amountWan: 300, share: 300 / 2600, stage: 'G0', closed: false },
+    ],
+    dimensions: [
+      { key: 'achievement', present: 2, missing: 1, ratio: 2 / 3 },
+      { key: 'evidence', present: 2, missing: 1, ratio: 2 / 3 },
+      { key: 'recognition', present: 2, missing: 1, ratio: 2 / 3 },
+      { key: 'nextMilestone', present: 1, missing: 2, ratio: 1 / 3 },
+    ],
+    gapRules: [
+      { rule: 'R1-gate0-missing', ruleNo: 1, level: 'high', count: 1 },
+      { rule: 'R11-no-next-milestone', ruleNo: 11, level: 'high', count: 1 },
+    ],
+    concentration: 1500 / 2600,
+    amountMissing: 0,
+    withProgress: 2,
+    lastActivity: '2026-11-01',
+  }
+}
+
 /** A v3 snapshot with three projects and a couple of gaps. */
 function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   const projects: ProjectSummary[] = [
@@ -107,6 +151,7 @@ function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     cachePath: '/Users/u/.dsh/cache/work-dashboard/repo',
     projects,
     stats: { total: 3, g0Passed: 2, inProgress: 3, amountTotalWan: 2600, g0Complete: 2, awaitingCustomer: 0, succeeded: 1, stopped: 0 },
+    analysis: analysis(),
     gaps: [
       {
         rule: 'R11-no-next-milestone', ruleNo: 11, level: 'high', priority: 96,
@@ -166,6 +211,13 @@ function detail(): ProjectDetail {
       reviewedAt: '2026-09-01',
       missing: [],
       complete: true,
+      checklist: [
+        { field: 'why_customer', present: true, value: '产线设备远程运维存在安全风险' },
+        { field: 'why_us', present: true, value: '制造业是重点行业' },
+        { field: 'decision_chain', present: true, value: '生产部提需求' },
+        { field: 'post_poc_decision', present: true, value: '采购' },
+        { field: 'tech_owner', present: true, value: '吴工' },
+      ],
     },
     plan: {
       customerPain: '设备远程运维风险',
@@ -228,9 +280,17 @@ function makeApi(options: {
     },
     async detail(pocId: string) {
       const record = options.detailRecord ?? detail()
-      if (record.summary.pocId !== pocId) {
-        const { ActionError } = await import('../src/client/api.js')
-        throw new ActionError('work-dashboard/unknown-project', `No project with poc_id ${pocId}.`, {})
+      // An unknown id is a real Host error and must still be testable; any id
+      // the snapshot knows is served by adapting the record's identity, so a
+      // test can open whichever project the current sort happens to put first.
+      if (pocId !== record.summary.pocId) {
+        const known = (options.initial ?? snapshot()).projects.some((project) => project.pocId === pocId)
+        if (!known) {
+          const { ActionError } = await import('../src/client/api.js')
+          throw new ActionError('work-dashboard/unknown-project', `No project with poc_id ${pocId}.`, {})
+        }
+        const target = (options.initial ?? snapshot()).projects.find((project) => project.pocId === pocId)!
+        return { ...record, summary: { ...record.summary, ...target } }
       }
       return record
     },
@@ -301,83 +361,102 @@ describe('empty state', () => {
 })
 
 describe('overview page', () => {
-  it('shows the four v3 headline counters', async () => {
+  it('renders the portfolio band instead of a flat stat strip', async () => {
     await renderPage(makeApi())
-    // The spec's acceptance list: total, G0 passed, in progress, amount sum.
-    for (const label of ['POC 总数', 'G0 通过', '进行中', '金额合计']) {
-      expect(screen.getAllByText(label).length).toBeGreaterThan(0)
-    }
-    // 1500 + 300 + 800 = 2600 万元
-    expect(screen.getByText('2,600')).toBeTruthy()
-    expect(screen.getByText('项目总览')).toBeTruthy()
+    // The band is the answer to "where does the money and the risk sit": six
+    // figures, each a chart rather than a number in a box.
+    expect(document.querySelectorAll('.chart-block').length).toBeGreaterThanOrEqual(6)
+    expect(screen.getAllByText('组合视图').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('阶段分布').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('体系 / 公司').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('金额集中度').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('四维覆盖').length).toBeGreaterThan(0)
   })
 
-  it('renders one row per project with name, stage and gap count', async () => {
+  it('renders four radial coverage meters, one per dimension', async () => {
     await renderPage(makeApi())
-    expect(screen.getByText('某某银行零信任试点')).toBeTruthy()
-    expect(screen.getAllByText('某某集团办公网改造').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('某某制造产线安全接入').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('G2-方案验证').length).toBeGreaterThan(0)
+    const meters = document.querySelectorAll('.radial')
+    expect(meters).toHaveLength(4)
+    expect([...meters].map((meter) => meter.getAttribute('aria-label')?.slice(0, 2))).toEqual(['目标', '证据', '客户', '下一'])
   })
 
-  it('renders the four dimensions as FOUR separate cards on the detail page', async () => {
-    // The v3 overview table carries the spec's seven columns, so the dimension
-    // block lives on the detail page — but the invariant is unchanged: four
-    // dimensions, four separate elements, never one merged "progress" value.
+  it('defaults to the card view and shows one card per project', async () => {
     await renderPage(makeApi())
-    fireEvent.click([...document.querySelectorAll('.project-row')].find((row) => row.textContent?.includes('某某制造产线安全接入'))!)
-    await waitFor(() => expect(document.querySelectorAll('.summary-item').length).toBe(4))
-    const cards = [...document.querySelectorAll('.summary-item')]
-    expect(cards.map((card) => card.querySelector('.summary-label')?.firstChild?.textContent)).toEqual(['目标达成', '证据', '客户认可', '下一步'])
-    // Each card carries its own present/missing state.
-    expect(cards.map((card) => (card as HTMLElement).dataset.present)).toEqual(['true', 'true', 'true', 'false'])
+    // Cards are the default: they answer "what needs me" better than rows.
+    expect(document.querySelectorAll('.pcard').length).toBe(3)
+    expect([...document.querySelectorAll('.pcard-name')].map((node) => node.textContent)).toContain('某某银行零信任试点')
+    expect([...document.querySelectorAll('.pcard-name')].map((node) => node.textContent)).toContain('某某集团办公网改造')
   })
 
-  it('shows a project with nothing filled in as four missing dimensions', async () => {
-    await renderPage(makeApi({
-      detailRecord: {
-        ...detail(),
-        summary: { ...detail().summary, pocId: 'POC-2026-002', name: '某某集团办公网改造', dimensions: { achievement: false, evidence: false, recognition: false, nextMilestone: false }, dimensionCount: 0 },
-        outcome: { ...detail().outcome, achievement: '', customerRecognition: '', ourProof: '', milestone: '' },
-        progress: [],
-      },
-    }))
-    fireEvent.click([...document.querySelectorAll('.project-row')].find((row) => row.textContent?.includes('某某集团办公网改造'))!)
-    await waitFor(() => expect(document.querySelectorAll('.summary-item').length).toBe(4))
-    const cards = [...document.querySelectorAll('.summary-item')]
-    expect(cards.map((card) => (card as HTMLElement).dataset.present)).toEqual(['false', 'false', 'false', 'false'])
+  it('switches to the board view with one column per stage', async () => {
+    await renderPage(makeApi())
+    fireEvent.click(screen.getByRole('button', { name: '看板' }))
+    await waitFor(() => expect(document.querySelectorAll('.pboard-column').length).toBeGreaterThanOrEqual(5))
+    // Each project lands in exactly one column, so the board total is the list.
+    expect(document.querySelectorAll('.pboard-card').length).toBe(3)
   })
 
-  it('shows a five-dot G0→G4 rail per row with distinct done/current states', async () => {
+  it('switches to the table view with the seven spec columns', async () => {
     await renderPage(makeApi())
-    const rows = [...document.querySelectorAll('.project-row')]
-    expect(rows).toHaveLength(3)
-    for (const row of rows) expect(row.querySelectorAll('.stage-dot')).toHaveLength(5)
-    // POC-001 is at G2. v3 derives each dot from its own field: G0 complete,
-    // G1 conclusion 通过, G2 ready Ready (so G2 is both done AND current), and
-    // G3/G4 have no confirming record yet.
-    const dots = [...rows[0]!.querySelectorAll('.stage-dot')]
-    expect(dots.map((dot) => ({
-      done: (dot as HTMLElement).dataset.done,
-      current: (dot as HTMLElement).dataset.current,
-    }))).toEqual([
-      { done: 'true', current: 'false' },
-      { done: 'true', current: 'false' },
-      { done: 'true', current: 'true' },
-      { done: 'false', current: 'false' },
-      { done: 'false', current: 'false' },
-    ])
+    fireEvent.click(screen.getByRole('button', { name: '表格' }))
+    await waitFor(() => expect(document.querySelectorAll('.project-row').length).toBe(3))
+    const headers = [...document.querySelectorAll('.table-head th')].map((cell) => cell.textContent?.replace(/[↑↓]/g, '').trim())
+    expect(headers).toEqual(['项目', '体系/公司', '阶段', '金额', '最新进展', '缺口', '操作'])
   })
 
-  it('lists the pending gaps in priority order', async () => {
+  it('filters by search text across name, id and owner', async () => {
     await renderPage(makeApi())
-    const pending = document.querySelectorAll('.gap-item')
-    expect(pending.length).toBeGreaterThanOrEqual(2)
+    const box = screen.getByRole('searchbox') as HTMLInputElement
+    fireEvent.change(box, { target: { value: '制造' } })
+    await waitFor(() => expect(document.querySelectorAll('.pcard').length).toBe(1))
+    expect([...document.querySelectorAll('.pcard-name')].map((node) => node.textContent)).toEqual(['某某制造产线安全接入'])
+    fireEvent.change(box, { target: { value: 'POC-2026-002' } })
+    await waitFor(() => expect(document.querySelectorAll('.pcard').length).toBe(1))
+    expect([...document.querySelectorAll('.pcard-name')].map((node) => node.textContent)).toEqual(['某某集团办公网改造'])
+  })
+
+  it('filters by a stage chip and clears it again', async () => {
+    await renderPage(makeApi())
+    const chip = [...document.querySelectorAll('.filter-chip')].find((node) => node.textContent?.includes('G2 方案验证'))
+    expect(chip).toBeTruthy()
+    fireEvent.click(chip!)
+    await waitFor(() => expect(document.querySelectorAll('.pcard').length).toBe(1))
+    fireEvent.click(chip!)
+    await waitFor(() => expect(document.querySelectorAll('.pcard').length).toBe(3))
+  })
+
+  it('shows an explicit empty state when the filters match nothing', async () => {
+    await renderPage(makeApi())
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'zzzz-no-such-project' } })
+    await waitFor(() => expect(screen.getByText('没有符合条件的项目')).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: /清除筛选/ }))
+    await waitFor(() => expect(document.querySelectorAll('.pcard').length).toBe(3))
+  })
+
+  it('moves the keyboard cursor with the arrow keys and opens with Enter', async () => {
+    await renderPage(makeApi())
+    const shell = document.querySelector('.wd-shell') as HTMLElement
+    fireEvent.keyDown(shell, { key: 'ArrowDown' })
+    await waitFor(() => expect(document.querySelectorAll('.pcard[data-selected="true"]').length).toBe(1))
+    fireEvent.keyDown(shell, { key: 'Enter' })
+    await waitFor(() => expect(document.querySelectorAll('.dt-rail').length).toBe(1))
+  })
+
+  it('shows the latest progress of the newest entry', async () => {
+    await renderPage(makeApi())
+    expect(screen.getAllByText(/客户阶段同步/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/还没有进展/).length).toBeGreaterThan(0)
+  })
+
+  it('groups the pending rail by rule', async () => {
+    await renderPage(makeApi())
+    expect(screen.getByText('待处理')).toBeTruthy()
     // R11 (priority 96) sorts before R1 (priority 90).
-    expect(pending[0]?.textContent).toContain('已达成但无下一步里程碑')
-    expect(pending[1]?.textContent).toContain('G0 必填未齐')
-    // Severity paints the flag.
-    expect(pending[0]?.className).toContain('gap-level-high')
+    const groups = [...document.querySelectorAll('.pending-group')]
+    expect(groups.length).toBeGreaterThanOrEqual(2)
+    expect(groups[0]?.textContent).toContain('已达成但无下一步里程碑')
+    expect(groups[1]?.textContent).toContain('G0 必填未齐')
+    expect(groups[0]?.getAttribute('data-level')).toBe('high')
   })
 
   it('shows the refresh timestamp once data exists', async () => {
@@ -527,38 +606,79 @@ describe('the scheduled refresh', () => {
 })
 
 describe('detail page', () => {
-  it('opens from a table row and shows the full record', async () => {
+  /** Open a project from the card view (the default). */
+  function openProject(name: string): void {
+    const card = [...document.querySelectorAll('.pcard')].find((node) => node.textContent?.includes(name))
+    if (card === undefined) throw new Error(`no card for ${name}`)
+    fireEvent.click(card)
+  }
+
+  it('opens from a card and shows the layered record', async () => {
     await renderPage(makeApi())
-    const row = [...document.querySelectorAll('.project-row')].find((candidate) => candidate.textContent?.includes('某某制造产线安全接入'))!
-    fireEvent.click(row)
-    await waitFor(() => expect(screen.getByText('某某制造产线安全接入')).toBeTruthy())
-    expect(screen.getByText('阶段轨道')).toBeTruthy()
-    expect(screen.getByText('进展流')).toBeTruthy()
-    expect(screen.getByText('四维结果')).toBeTruthy()
-    expect(screen.getByText('身份')).toBeTruthy()
-    expect(screen.getByText('计划（G1/G2）')).toBeTruthy()
-    expect(screen.getByText('结论')).toBeTruthy()
+    openProject('某某制造产线安全接入')
+    await waitFor(() => expect(document.querySelectorAll('.dt-rail').length).toBe(1))
+    // The rail is the persistent "project file"; the stream is the reading pane.
+    expect(screen.getAllByText('进展流').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('四维结果').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('G0 必填完整度').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('计划（G1 / G2）').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('结论').length).toBeGreaterThan(0)
   })
 
   it('shows the four dimensions as four separate summary cards', async () => {
     await renderPage(makeApi())
-    fireEvent.click([...document.querySelectorAll('.project-row')].find((row) => row.textContent?.includes('某某制造产线安全接入'))!)
-    await waitFor(() => expect(document.querySelectorAll('.summary-item').length).toBe(4))
-    const cards = [...document.querySelectorAll('.summary-item')]
-    expect(cards.map((card) => card.querySelector('.summary-label')?.firstChild?.textContent)).toEqual(['目标达成', '证据', '客户认可', '下一步'])
+    openProject('某某制造产线安全接入')
+    await waitFor(() => expect(document.querySelectorAll('.dim-card').length).toBe(4))
+    const cards = [...document.querySelectorAll('.dim-card')]
     expect(cards.map((card) => (card as HTMLElement).dataset.present)).toEqual(['true', 'true', 'true', 'false'])
+    // The origin tag distinguishes a derived dimension from a hand-filled one.
+    expect(cards.map((card) => (card as HTMLElement).dataset.origin)).toEqual(['auto', 'manual', 'auto', 'manual'])
+  })
+
+  it('shows a project with nothing filled in as four missing dimensions', async () => {
+    await renderPage(makeApi({
+      detailRecord: {
+        ...detail(),
+        summary: { ...detail().summary, pocId: 'POC-2026-002', name: '某某集团办公网改造', dimensions: { achievement: false, evidence: false, recognition: false, nextMilestone: false }, dimensionCount: 0 },
+        outcome: { ...detail().outcome, achievement: '', customerRecognition: '', ourProof: '', milestone: '' },
+        progress: [],
+      },
+    }))
+    openProject('某某集团办公网改造')
+    await waitFor(() => expect(document.querySelectorAll('.dim-card').length).toBe(4))
+    expect([...document.querySelectorAll('.dim-card')].map((card) => (card as HTMLElement).dataset.present)).toEqual(['false', 'false', 'false', 'false'])
+  })
+
+  it('renders the five G0 prerequisites as one meter, including tech_owner', async () => {
+    await renderPage(makeApi())
+    openProject('某某制造产线安全接入')
+    await waitFor(() => expect(document.querySelectorAll('.g0-cell').length).toBe(5))
+    const cells = [...document.querySelectorAll('.g0-cell')]
+    expect(cells.map((cell) => (cell as HTMLElement).dataset.present)).toEqual(['true', 'true', 'true', 'true', 'true'])
+    // tech_owner lives in the identity block but still counts as one of the five.
+    expect(cells[4]?.textContent).toContain('客户技术责任人')
   })
 
   it('shows the progress stream newest-first, with evidence and recognition', async () => {
     await renderPage(makeApi())
-    fireEvent.click([...document.querySelectorAll('.project-row')].find((row) => row.textContent?.includes('某某制造产线安全接入'))!)
-    await waitFor(() => expect(document.querySelectorAll('.timeline-item').length).toBe(2))
-    const items = [...document.querySelectorAll('.timeline-item')]
-    // v3: the progress stream is the history, and the newest entry comes first.
+    openProject('某某制造产线安全接入')
+    await waitFor(() => expect(document.querySelectorAll('.prog-item').length).toBe(2))
+    const items = [...document.querySelectorAll('.prog-item')]
     expect(items[0]?.textContent).toContain('2026/11/01')
     expect(items[0]?.textContent).toContain('验收报告.pdf')
     expect(items[0]?.textContent).toContain('认可')
     expect(items[1]?.textContent).toContain('2026/09/01')
+    // A linked evidence title is a real anchor, not a dead chip.
+    expect(items[0]?.querySelector('a[href="https://example.com/b"]')).not.toBeNull()
+  })
+
+  it('marks an entry with no evidence and no next step explicitly', async () => {
+    await renderPage(makeApi())
+    openProject('某某制造产线安全接入')
+    await waitFor(() => expect(document.querySelectorAll('.prog-item').length).toBe(2))
+    const oldest = [...document.querySelectorAll('.prog-item')][1]!
+    expect(oldest.textContent).toContain('无证据')
+    expect(oldest.textContent).toContain('没有安排下一步')
   })
 
   it('shows an explicit empty state when a project has no progress yet', async () => {
@@ -571,49 +691,57 @@ describe('detail page', () => {
         summary: { ...detail().summary, progressCount: 0, lastProgressDate: null, lastProgressSummary: '' },
       },
     }))
-    fireEvent.click([...document.querySelectorAll('.project-row')].find((row) => row.textContent?.includes('某某制造产线安全接入'))!)
+    openProject('某某制造产线安全接入')
     await waitFor(() => expect(screen.getByText('还没有进展记录')).toBeTruthy())
     expect(screen.getByText('第一次进展后，这里会显示完整时间线。')).toBeTruthy()
   })
 
   it('returns to the overview with the back button', async () => {
     await renderPage(makeApi())
-    fireEvent.click([...document.querySelectorAll('.project-row')].find((row) => row.textContent?.includes('某某制造产线安全接入'))!)
+    openProject('某某制造产线安全接入')
     await waitFor(() => expect(screen.getByRole('button', { name: '← 返回' })).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: '← 返回' }))
-    await waitFor(() => expect(screen.getByText('项目总览')).toBeTruthy())
+    await waitFor(() => expect(document.querySelectorAll('.pcard').length).toBe(3))
+  })
+
+  it('leaves the detail page with Escape', async () => {
+    await renderPage(makeApi())
+    openProject('某某制造产线安全接入')
+    await waitFor(() => expect(document.querySelectorAll('.dt-rail').length).toBe(1))
+    fireEvent.keyDown(document.querySelector('.wd-shell') as HTMLElement, { key: 'Escape' })
+    await waitFor(() => expect(document.querySelectorAll('.pcard').length).toBe(3))
   })
 })
 
 describe('milestone 3 views', () => {
-  it('opens the risk board with rows ordered high → medium → unrated', async () => {
+  it('opens the risk board with severity lanes', async () => {
     await renderPage(makeApi())
     const header = document.querySelector('.header-actions') as HTMLElement
     fireEvent.click(within(header).getByText('风险看板'))
     await waitFor(() => expect(document.querySelectorAll('.risk-row').length).toBe(3))
+    // The board is grouped into lanes, so severity reads as a shape not a sort.
+    const lanes = [...document.querySelectorAll('.risk-lane')]
+    expect(lanes.length).toBeGreaterThanOrEqual(2)
+    expect(lanes[0]?.textContent).toContain('高')
     const rows = [...document.querySelectorAll('.risk-row')]
-    expect(rows.map((row) => (row as HTMLElement).dataset.level)).toEqual(['high', 'medium', 'unset'])
-    // Each row names its project so it is not read in isolation.
     expect(rows[0]?.textContent).toContain('某某制造产线安全接入')
   })
 
-  it('shows the risk severity counters', async () => {
+  it('shows the risk severity distribution figure', async () => {
     await renderPage(makeApi())
     const header = document.querySelector('.header-actions') as HTMLElement
     fireEvent.click(within(header).getByText('风险看板'))
-    await waitFor(() => expect(document.querySelector('.stat-grid')).not.toBeNull())
-    expect(screen.getAllByText(/高 1/).length).toBeGreaterThan(0)
+    await waitFor(() => expect(document.querySelectorAll('.segbar-seg').length).toBeGreaterThanOrEqual(3))
   })
 
   it('opens the global timeline newest-first with the silent projects listed', async () => {
     await renderPage(makeApi())
     const header = document.querySelector('.header-actions') as HTMLElement
     fireEvent.click(within(header).getByText('时间线'))
-    await waitFor(() => expect(document.querySelectorAll('.timeline-item').length).toBe(2))
-    const items = [...document.querySelectorAll('.timeline-item')]
+    await waitFor(() => expect(document.querySelectorAll('.tl-entry').length).toBe(2))
+    const items = [...document.querySelectorAll('.tl-entry')]
     expect(items[0]?.textContent).toContain('2026/11/01')
     expect(items[1]?.textContent).toContain('2026/10/28')
-    // The project with no history is named rather than silently absent.
     expect(screen.getAllByText(/某某集团办公网改造/).length).toBeGreaterThan(0)
   })
 
@@ -621,20 +749,9 @@ describe('milestone 3 views', () => {
     await renderPage(makeApi())
     const header = document.querySelector('.header-actions') as HTMLElement
     fireEvent.click(within(header).getByText('时间线'))
-    await waitFor(() => expect(document.querySelectorAll('.timeline-item').length).toBe(2))
-    // The 2026-10-28 round has neither, and saying so is the point.
+    await waitFor(() => expect(document.querySelectorAll('.tl-entry').length).toBe(2))
     expect(screen.getAllByText('无证据').length).toBeGreaterThan(0)
     expect(screen.getAllByText('无客户反馈').length).toBeGreaterThan(0)
-  })
-
-  it('opens a project from a timeline entry', async () => {
-    await renderPage(makeApi())
-    const header = document.querySelector('.header-actions') as HTMLElement
-    fireEvent.click(within(header).getByText('时间线'))
-    await waitFor(() => expect(document.querySelectorAll('.timeline-item').length).toBe(2))
-    const link = [...document.querySelectorAll('.timeline-item .gap-link')][0] as HTMLElement
-    fireEvent.click(link)
-    await waitFor(() => expect(document.querySelector('.project-hero')).not.toBeNull())
   })
 })
 
@@ -644,13 +761,13 @@ describe('bilingual copy', () => {
     // The shell identity sits in the eyebrow; the page title is the module name.
     expect(screen.getByText('Work Dashboard · read-only')).toBeTruthy()
     expect(screen.getAllByText('POC Operations').length).toBeGreaterThan(0)
-    expect(screen.getByText('Projects')).toBeTruthy()
+    expect(screen.getAllByText('Portfolio view').length).toBeGreaterThan(0)
     // The four dimension labels stay four separate labels in English too, on the
     // detail page where the v3 model renders them.
     // The API double only serves POC-2026-003's detail record.
-    fireEvent.click([...document.querySelectorAll('.project-row')].find((row) => row.textContent?.includes('某某制造产线安全接入'))!)
-    await waitFor(() => expect(document.querySelectorAll('.summary-item').length).toBe(4))
-    const labels = [...document.querySelectorAll('.summary-label')].map((node) => node.firstChild?.textContent)
+    fireEvent.click([...document.querySelectorAll('.pcard')].find((card) => card.textContent?.includes('某某制造产线安全接入'))!)
+    await waitFor(() => expect(document.querySelectorAll('.dim-card').length).toBe(4))
+    const labels = [...document.querySelectorAll('.dim-card')].map((node) => node.querySelector('.dim-card-label')?.textContent)
     expect(labels).toEqual(['Goal met', 'Evidence', 'Recognition', 'Next step'])
   })
 })
@@ -658,9 +775,9 @@ describe('bilingual copy', () => {
 /** The `PocRecord` type is re-exported by the view module for renderer users. */
 describe('module surface', () => {
   it('exports the page and the sidebar glyph', async () => {
-    const view = await import('../src/client/view.jsx')
-    expect(view.WorkDashboardPage).toBeTypeOf('function')
-    expect(view.SidebarGlyph).toBeTypeOf('function')
+    const shell = await import('../src/client/shell.jsx')
+    expect(shell.WorkDashboardPage).toBeTypeOf('function')
+    expect(shell.SidebarGlyph).toBeTypeOf('function')
     const record: PocRecord = { poc_id: 'x' }
     expect(record.poc_id).toBe('x')
   })

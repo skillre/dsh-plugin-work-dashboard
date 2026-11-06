@@ -252,7 +252,7 @@ try {
     const first = await rpcOk(origin, cookie, { action: 'refresh' })
     assert.equal(first.outcome.mode, 'clone', 'the first refresh must clone')
     assert.ok(first.snapshot.cacheReady, 'a successful refresh must produce a ready cache')
-    assert.equal(first.snapshot.projects.length, 3, 'the repository holds three test projects')
+    assert.equal(first.snapshot.projects.length, 5, 'the repository holds five test projects')
     report.endpoint.refresh1 = { mode: first.outcome.mode, projects: first.snapshot.projects.length, durationMs: first.outcome.durationMs }
     checks.push('api-refresh-clone')
 
@@ -267,11 +267,30 @@ try {
     assert.ok(rules.has('R1-gate0-missing') && rules.has('R11-no-next-milestone'), 'the R1 and R11 rules must fire on the fixtures')
     assert.equal(first.snapshot.gaps[0].rule, 'R11-no-next-milestone', 'the highest-value gap must sort first')
     // v3 headline counters: total, G0 passed, in progress, amount sum.
-    assert.equal(first.snapshot.stats.total, 3)
-    assert.equal(first.snapshot.stats.g0Passed, 2)
-    assert.equal(first.snapshot.stats.amountTotalWan, 2600)
+    // 300 + 1500 + 800 + 500 + 0
+    assert.equal(first.snapshot.stats.total, 5)
+    assert.equal(first.snapshot.stats.g0Passed, 4)
+    assert.equal(first.snapshot.stats.amountTotalWan, 3100)
     report.endpoint.board = { stats: first.snapshot.stats, gaps: first.snapshot.gaps.length, firstRule: first.snapshot.gaps[0].rule }
     checks.push('api-board-computed')
+
+    // 3b. The portfolio analysis is shipped as part of the snapshot, and every
+    //     figure accounts for the same project set the list shows.
+    const analysis = first.snapshot.analysis
+    assert.ok(analysis, 'the snapshot must carry the portfolio analysis')
+    assert.deepEqual(analysis.stages.map((bucket) => bucket.key), ['G0', 'G1', 'G2', 'G3', 'G4', 'closed', 'unknown'])
+    assert.equal(analysis.stages.reduce((sum, bucket) => sum + bucket.count, 0), 5, 'every project lands in exactly one stage bucket')
+    assert.equal(analysis.stages.reduce((sum, bucket) => sum + bucket.amountWan, 0), 3100, 'the funnel amounts must sum to the portfolio total')
+    assert.equal(analysis.dimensions.length, 4, 'four dimension coverage rows')
+    assert.equal(analysis.topAmounts.length, 4, 'four projects carry an amount')
+    assert.equal(analysis.concentration, 1500 / 3100, 'the largest project share is the concentration figure')
+    assert.equal(analysis.topAmounts[0].amountWan, 1500, 'the concentration list is largest first')
+    assert.equal(analysis.gapRules.reduce((sum, row) => sum + row.count, 0), first.snapshot.gaps.length, 'rule counts must account for every finding')
+    assert.equal(analysis.amountMissing, 1, 'the closed fixture carries no amount')
+    assert.ok(analysis.orgs.length >= 4, 'the org breakdown covers every system/company pair')
+    assert.ok(analysis.types.length >= 4, 'the type composition covers every poc_type')
+    report.endpoint.analysis = { stages: analysis.stages.map((bucket) => `${bucket.key}:${bucket.count}`), orgs: analysis.orgs.length, topAmount: analysis.topAmounts[0].amountWan }
+    checks.push('api-portfolio-analysis')
 
     // 4. Detail page: the v3 record with the progress stream.
     const detail = await rpcOk(origin, cookie, { action: 'detail', pocId: 'POC-2026-003' })
@@ -281,6 +300,11 @@ try {
     assert.equal(detail.progress[1].gate3_2, '已确认')
     assert.equal(detail.outcome.achievement, '达成')
     assert.equal(detail.outcome.milestone, '')
+    // The G0 checklist is the five prerequisites in schema order, with tech_owner
+    // read from the identity block rather than from gate0.
+    assert.equal(detail.gate0.checklist.length, 5)
+    assert.deepEqual(detail.gate0.checklist.map((item) => item.field), ['why_customer', 'why_us', 'decision_chain', 'post_poc_decision', 'tech_owner'])
+    assert.equal(detail.gate0.checklist.find((item) => item.field === 'tech_owner').present, true)
     report.endpoint.detail = { progress: detail.progress.length, achievement: detail.outcome.achievement }
     checks.push('api-detail')
 

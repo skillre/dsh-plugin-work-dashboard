@@ -68,7 +68,7 @@ export interface ScanOptions {
 }
 
 /** Rule metadata: number, severity and sort weight. */
-const RULE_META: Record<GapItem['rule'], { no: number; level: GapLevel; priority: number }> = {
+export const RULE_META: Record<GapItem['rule'], { no: number; level: GapLevel; priority: number }> = {
   // R1: the G0 floor. Nothing downstream is trustworthy without it.
   'R1-gate0-missing': { no: 1, level: 'high', priority: 90 },
   // R2: a large commitment decided before the gate was cleared.

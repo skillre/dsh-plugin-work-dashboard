@@ -140,10 +140,13 @@ const CONSOLE_STATE = `(() => {
     emptyTitle: document.querySelector('.empty-title')?.textContent ?? null,
     emptyCopy: document.querySelector('.empty-copy')?.textContent ?? null,
     rows: document.querySelectorAll('.project-row').length,
-    dimCells: document.querySelectorAll('.dim-cell').length,
-    stageDots: document.querySelectorAll('.stage-dot').length,
+    cards: document.querySelectorAll('.pcard').length,
+    boardCards: document.querySelectorAll('.pboard-card').length,
+    bandBlocks: document.querySelectorAll('.pf-block').length,
+    radials: document.querySelectorAll('.radial').length,
+    pendingGroups: document.querySelectorAll('.pending-group').length,
     statValues: [...document.querySelectorAll('.stat-value')].map((node) => node.textContent),
-    pendingItems: document.querySelectorAll('.gap-item').length,
+    pendingItems: document.querySelectorAll('.pending-group').length,
     failure: document.querySelector('.failure-reason')?.textContent ?? null,
     footer: document.querySelector('.page-footer')?.textContent ?? null,
     refreshing: !!document.querySelector('.spinner'),
@@ -181,6 +184,11 @@ try {
     return true;
   })()`)
   await page.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 2, mobile: false })
+  // Pin the colour scheme: headless Chrome follows the host's appearance, so a
+  // run on a dark desktop would otherwise capture dark evidence and a run on a
+  // light one light evidence. The evidence must describe the plugin, not the
+  // machine it was captured on. The dark assertion below flips this explicitly.
+  await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] })
   // Start from a deterministic reload: the browser profile is reused between
   // runs, so a panel selected by a previous run must not leak into this one.
   // A reload also proves the console remounts from scratch, which is the state
@@ -276,91 +284,320 @@ try {
   let board = null
   for (let attempt = 0; attempt < 60; attempt += 1) {
     const state = await page.evaluate(CONSOLE_STATE)
-    if (state.rows >= 3) { board = state; break }
+    if (state.cards >= 5) { board = state; break }
     await page.wait(500)
   }
   record('refresh-clones-and-renders', {
-    ok: board !== null && board.rows === 3,
-    detail: board === null ? 'no rows appeared within 30s' : `${board.rows} project row(s)`,
+    ok: board !== null && board.cards === 5,
+    detail: board === null ? 'no cards appeared within 30s' : `${board.cards} project card(s)`,
   })
   if (board === null) throw new Error('the board never rendered')
 
-  // 5. The four headline counters.
-  record('stat-grid-four-counters', {
-    ok: board.statValues.length === 4,
-    detail: `values=${board.statValues.join('/')}`,
+  // 5. THE PORTFOLIO BAND: six figures, each a chart, each a filter.
+  const band = await page.evaluate(`(() => ({
+    blocks: [...document.querySelectorAll('.pf-block')].map((node) => node.querySelector('.chart-block-title')?.textContent ?? ''),
+    columns: document.querySelectorAll('.columns-cell').length,
+    barlists: document.querySelectorAll('.barlist-row').length,
+    donutSlices: document.querySelectorAll('.donut-slice').length,
+    radials: document.querySelectorAll('.radial').length,
+    radialLabels: [...document.querySelectorAll('.radial-label')].map((node) => node.textContent),
+    segbarSegs: document.querySelectorAll('.segbar-seg').length,
+    title: document.querySelector('.pf-band-title')?.textContent ?? null,
+    note: document.querySelector('.pf-band-note')?.textContent ?? null,
+  }))()`)
+  record('band-renders-six-figures', {
+    ok: band.blocks.length === 6,
+    detail: band.blocks.join(' | '),
+  })
+  record('band-stage-funnel-is-a-column-chart', {
+    ok: band.columns >= 5,
+    detail: `${band.columns} stage column(s)`,
+  })
+  record('band-org-breakdown-is-a-bar-list', {
+    ok: band.barlists >= 3,
+    detail: `${band.barlists} bar row(s)`,
+  })
+  record('band-type-composition-is-a-donut', {
+    ok: band.donutSlices >= 2,
+    detail: `${band.donutSlices} slice(s)`,
+  })
+  record('band-four-dimension-coverage-meters', {
+    ok: band.radials === 4 && band.radialLabels.join('|') === '目标达成|证据|客户认可|下一步',
+    detail: band.radialLabels.join('|'),
+  })
+  record('band-shows-portfolio-total', {
+    ok: (band.note ?? '').includes('5') && (band.note ?? '').includes('万元'),
+    detail: band.note,
+  })
+  // The band is context, not the page: it must be collapsible so the project
+  // list can own the screen when the reader is done with the overview.
+  const collapsed = await page.evaluate(`(() => {
+    const button = document.querySelector('.pf-collapse');
+    if (!button) return { present: false };
+    button.click();
+    return { present: true, blocksAfter: document.querySelectorAll('.pf-block').length };
+  })()`)
+  await page.wait(400)
+  const expanded = await page.evaluate(`(() => {
+    const button = document.querySelector('.pf-collapse');
+    button?.click();
+    return { blocksAfter: document.querySelectorAll('.pf-block').length };
+  })()`)
+  await page.wait(400)
+  const firstScreen = await page.evaluate(`(() => {
+    const grid = document.querySelector('.workspace-grid');
+    if (!grid) return { visible: false };
+    const rect = grid.getBoundingClientRect();
+    const viewport = window.innerHeight;
+    return {
+      visible: rect.top < viewport,
+      top: Math.round(rect.top),
+      viewport,
+      bandHeight: Math.round(document.querySelector('.pf-band')?.getBoundingClientRect().height ?? 0),
+      chromeHeight: Math.round((document.querySelector('.page-header')?.getBoundingClientRect().height ?? 0) + (document.querySelector('.toolbar')?.getBoundingClientRect().height ?? 0)),
+    };
+  })()`)
+  record('project-list-is-visible-without-scrolling', {
+    ok: firstScreen.visible === true && firstScreen.top < firstScreen.viewport,
+    detail: `list starts at ${firstScreen.top}px of ${firstScreen.viewport}px (band=${firstScreen.bandHeight}px, chrome=${firstScreen.chromeHeight}px)`,
+  })
+  record('band-collapses-to-its-header', {
+    ok: collapsed.present === true && (await page.evaluate(`document.querySelectorAll('.pf-block').length`)) === 6,
+    detail: `collapsed blocks=${collapsed.blocksAfter}, restored blocks=${expanded.blocksAfter}`,
   })
 
-  // 6. The v3 table carries the seven spec columns and a latest-progress cell.
+  // 6. THE CARD VIEW (the default): one card per project, four dimension marks.
+  const cardView = await page.evaluate(`(() => {
+    const cards = [...document.querySelectorAll('.pcard')];
+    return {
+      count: cards.length,
+      names: cards.map((card) => card.querySelector('.pcard-name')?.textContent ?? ''),
+      dimsPerCard: cards.map((card) => card.querySelectorAll('.pcard-dim').length),
+      rails: cards.map((card) => card.querySelectorAll('.rail-mini-tick').length),
+      badges: cards.map((card) => card.querySelector('.pcard-badge')?.textContent ?? null),
+      amounts: cards.map((card) => card.querySelector('.pcard-amount')?.textContent ?? ''),
+      progress: cards.map((card) => card.querySelector('.pcard-progress-copy')?.textContent ?? ''),
+    };
+  })()`)
+  record('card-view-one-card-per-project', {
+    ok: cardView.count === 5,
+    detail: `${cardView.count} card(s): ${cardView.names.join(' | ')}`,
+  })
+  record('card-view-four-dimension-marks-each', {
+    ok: cardView.dimsPerCard.every((count) => count === 4),
+    detail: cardView.dimsPerCard.join(','),
+  })
+  record('card-view-five-tick-stage-rail-each', {
+    ok: cardView.rails.every((count) => count === 5),
+    detail: cardView.rails.join(','),
+  })
+  record('card-view-shows-amount-and-latest-progress', {
+    ok: cardView.amounts.some((text) => text.includes('1,500')) && cardView.progress.some((text) => text.includes('验收通过')),
+    detail: `amounts=${cardView.amounts.join('|')}`,
+  })
+
+  // 7. VIEW SWITCH: the same five projects, read three ways.
+  const switchTo = async (label) => {
+    await page.evaluate(`(() => {
+      const button = [...document.querySelectorAll('.view-switch-btn')].find((b) => (b.innerText || '').trim() === ${JSON.stringify(label)});
+      button?.click();
+    })()`)
+    await page.wait(700)
+  }
+  await switchTo('看板')
+  const boardView = await page.evaluate(`(() => ({
+    columns: [...document.querySelectorAll('.pboard-column')].map((node) => node.querySelector('.pboard-column-label')?.textContent ?? ''),
+    cards: document.querySelectorAll('.pboard-card').length,
+    emptyColumns: document.querySelectorAll('.pboard-empty').length,
+  }))()`)
+  record('board-view-one-column-per-stage', {
+    ok: boardView.columns.length >= 5 && boardView.columns.length <= 7,
+    detail: boardView.columns.join(' | '),
+  })
+  record('board-view-holds-every-project', {
+    ok: boardView.cards === 5,
+    detail: `${boardView.cards} board card(s) in ${boardView.columns.length} column(s)`,
+  })
+
+  await switchTo('表格')
   const tableShape = await page.evaluate(`(() => ({
-    headers: [...document.querySelectorAll('.table-head th')].map((node) => node.textContent),
+    headers: [...document.querySelectorAll('.table-head th')].map((node) => node.textContent.replace(/[↑↓]/g, '').trim()),
     rows: document.querySelectorAll('.project-row').length,
     progressCells: [...document.querySelectorAll('.progress-summary')].length,
     amountCells: [...document.querySelectorAll('.amount-cell')].map((node) => node.textContent),
+    sortable: document.querySelectorAll('.ptable-sort').length,
+    selected: document.querySelectorAll('.project-row[data-selected="true"]').length,
   }))()`)
-  record('table-has-v3-columns', {
+  record('table-view-has-seven-spec-columns', {
     ok: tableShape.headers.join('|') === '项目|体系/公司|阶段|金额|最新进展|缺口|操作',
     detail: tableShape.headers.join('|'),
   })
-  record('table-shows-amount', {
-    ok: tableShape.amountCells.join(',') === '300,1,500,800',
+  record('table-view-keeps-every-project', { ok: tableShape.rows === 5, detail: `${tableShape.rows} row(s)` })
+  record('table-view-shows-amount', {
+    ok: tableShape.amountCells.includes('1,500') && tableShape.amountCells.includes('800') && tableShape.amountCells.includes('—'),
     detail: `amounts=${tableShape.amountCells.join(',')}`,
   })
-  record('table-shows-latest-progress', {
-    ok: tableShape.progressCells >= 1,
-    detail: `${tableShape.progressCells} progress cell(s)`,
+  record('table-view-shows-latest-progress', { ok: tableShape.progressCells >= 2, detail: `${tableShape.progressCells} progress cell(s)` })
+  record('table-view-offers-sortable-headers', { ok: tableShape.sortable >= 3, detail: `${tableShape.sortable} sortable header(s)` })
+
+  // 8. SORTING: click the amount header and confirm the order flips.
+  const sortProbe = await page.evaluate(`(() => {
+    const before = [...document.querySelectorAll('.amount-cell')].map((node) => node.textContent);
+    const header = [...document.querySelectorAll('.ptable-sort')].find((node) => (node.textContent || '').includes('金额'));
+    header?.click();
+    return { before };
+  })()`)
+  await page.wait(600)
+  const sortAfter = await page.evaluate(`(() => ({
+    after: [...document.querySelectorAll('.amount-cell')].map((node) => node.textContent),
+    active: [...document.querySelectorAll('.ptable-sort[data-active="true"]')].map((node) => node.textContent.trim()),
+  }))()`)
+  record('table-sort-reorders-the-rows', {
+    ok: sortAfter.after.join(',') !== sortProbe.before.join(',') || sortAfter.active.some((label) => label.includes('金额')),
+    detail: `before=${sortProbe.before.join(',')} after=${sortAfter.after.join(',')} active=${sortAfter.active.join('|')}`,
   })
 
-  // 7. The G0→G4 stage track is visible.
-  record('stage-track-visible', { ok: board.stageDots === board.rows * 5, detail: `${board.stageDots} stage dots` })
-
-  // 8. The pending list is ordered with the highest-value gap first.
-  const pendingDetail = await page.evaluate(`(() => [...document.querySelectorAll('.gap-item')].map((item) => ({
-    title: item.querySelector('.gap-title')?.textContent ?? null,
-    level: item.className,
-  })))()`)
-  record('pending-list-ordered', {
-    ok: pendingDetail.length > 0 && (pendingDetail[0]?.title ?? '').includes('已达成但无下一步里程碑'),
-    detail: pendingDetail.map((item) => item.title).join(' | '),
+  // 9. SEARCH: typing narrows the list without a refetch.
+  await switchTo('卡片')
+  await page.evaluate(`(() => {
+    const input = document.querySelector('.search-input');
+    if (!input) return false;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setter.call(input, '产线');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  })()`)
+  await page.wait(700)
+  const searched = await page.evaluate(CONSOLE_STATE)
+  record('search-narrows-the-list', {
+    ok: searched.cards === 1,
+    detail: `${searched.cards} card(s) match "产线"`,
   })
-  const boardShot = await page.shot('work-dashboard-board.png')
+  const filteredCount = await page.evaluate(`document.querySelector('.toolbar-result')?.textContent ?? null`)
+  record('search-reports-the-visible-count', {
+    ok: (filteredCount ?? '').includes('1') && (filteredCount ?? '').includes('5'),
+    detail: filteredCount,
+  })
+  await page.evaluate(`(() => { document.querySelector('.search-clear')?.click(); return true; })()`)
+  await page.wait(600)
+  const cleared = await page.evaluate(CONSOLE_STATE)
+  record('search-clears-back-to-the-full-list', { ok: cleared.cards === 5, detail: `${cleared.cards} card(s)` })
 
-  // 9. DETAIL PAGE: open a row and confirm the full record.
-  const opened = await page.evaluate(`(() => {
-    const row = [...document.querySelectorAll('.project-row')].find((candidate) => (candidate.innerText || '').includes('产线安全接入'));
-    if (!row) return false;
-    row.click();
+  // 10. KEYBOARD: arrow keys move a visible cursor, Enter opens, Escape returns.
+  await page.evaluate(`(() => {
+    const shell = document.querySelector('.wd-shell');
+    shell?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    return true;
+  })()`)
+  await page.wait(500)
+  record('keyboard-arrow-selects-a-card', {
+    ok: (await page.evaluate(`document.querySelectorAll('.pcard[data-selected="true"]').length`)) === 1,
+    detail: 'one card carries data-selected',
+  })
+  await page.evaluate(`(() => {
+    const shell = document.querySelector('.wd-shell');
+    shell?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    return true;
+  })()`)
+  await page.wait(1200)
+  record('keyboard-enter-opens-the-detail', {
+    ok: (await page.evaluate(`document.querySelectorAll('.dt-rail').length`)) === 1,
+    detail: 'rail mounted',
+  })
+
+  // 10b. Open a KNOWN project for the structural detail assertions: the keyboard
+  //      cursor lands wherever the current sort put it, which is not a stable
+  //      fixture. POC-2026-003 is the one with a two-entry progress stream and an
+  //      achieved-but-no-milestone outcome, so it is the interesting record.
+  await page.evaluate(`(() => {
+    const shell = document.querySelector('.wd-shell');
+    shell?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    return true;
+  })()`)
+  await page.wait(900)
+  await page.evaluate(`(() => {
+    const card = [...document.querySelectorAll('.pcard')].find((node) => (node.innerText || '').includes('产线安全接入'));
+    card?.click();
     return true;
   })()`)
   await page.wait(1200)
   const detailState = await page.evaluate(`(() => ({
-    hero: !!document.querySelector('.project-hero'),
-    title: document.querySelector('.project-title')?.textContent ?? null,
-    stageTrack: document.querySelectorAll('.stage-step').length,
-    summaryItems: document.querySelectorAll('.summary-item').length,
-    summaryLabels: [...document.querySelectorAll('.summary-label')].map((node) => node.firstChild?.textContent ?? node.textContent),
-    summaryMarks: [...document.querySelectorAll('.summary-item')].map((item) => item.getAttribute('data-present')),
-    timelineItems: document.querySelectorAll('.timeline-item').length,
-    progressItems: document.querySelectorAll('.timeline-item').length,
-    sections: [...document.querySelectorAll('.section-heading')].map((node) => node.firstChild?.textContent ?? node.textContent),
+    rail: document.querySelectorAll('.dt-rail').length,
+    title: document.querySelector('.dt-rail-title')?.textContent ?? null,
+    stages: document.querySelectorAll('.dt-stage').length,
+    dimCards: document.querySelectorAll('.dim-card').length,
+    dimOrigins: [...document.querySelectorAll('.dim-card')].map((node) => node.getAttribute('data-origin')),
+    dimMarks: [...document.querySelectorAll('.dim-card')].map((node) => node.getAttribute('data-present')),
+    g0Cells: document.querySelectorAll('.g0-cell').length,
+    g0Present: [...document.querySelectorAll('.g0-cell')].map((node) => node.getAttribute('data-present')),
+    progressItems: document.querySelectorAll('.prog-item').length,
+    sections: [...document.querySelectorAll('.dsec-title')].map((node) => node.textContent),
+    evidenceLinks: document.querySelectorAll('.prog-evidence-link').length,
+    milestoneCallout: document.querySelector('.out-milestone')?.getAttribute('data-present') ?? null,
+    nextBlocks: document.querySelectorAll('.prog-next').length,
+    emptyNext: document.querySelectorAll('.prog-next-empty').length,
   }))()`)
-  record('detail-page-opens', { ok: opened && detailState.hero, detail: `title=${detailState.title}` })
-  record('detail-stage-rail-five-steps', { ok: detailState.stageTrack === 5, detail: `${detailState.stageTrack} steps` })
-  record('detail-four-dimension-cards', {
-    ok: detailState.summaryItems === 4 && detailState.summaryLabels.join('|') === '目标达成|证据|客户认可|下一步' && detailState.summaryMarks.join(',') === 'true,true,true,false',
-    detail: `marks=${detailState.summaryMarks.join(',')}`,
+  record('detail-rail-is-a-sticky-project-file', {
+    ok: detailState.stages === 5 && detailState.rail === 1,
+    detail: `${detailState.stages} vertical stage rows, title=${detailState.title}`,
   })
-  record('detail-progress-stream', { ok: detailState.progressItems >= 2, detail: `${detailState.progressItems} progress item(s)` })
-  record('detail-sections-present', {
-    ok: ['阶段轨道', '进展流', '四维结果', '身份', '计划（G1/G2）', '结论'].every((label) => detailState.sections.some((section) => (section ?? '').includes(label))),
+  record('detail-four-dimension-cards-with-origin', {
+    ok: detailState.dimCards === 4 && detailState.dimOrigins.join(',') === 'auto,manual,auto,manual',
+    detail: `origins=${detailState.dimOrigins.join(',')} marks=${detailState.dimMarks.join(',')}`,
+  })
+  record('detail-g0-five-cell-meter', {
+    ok: detailState.g0Cells === 5 && detailState.g0Present.filter((value) => value === 'true').length >= 4,
+    detail: `${detailState.g0Cells} cells, present=${detailState.g0Present.join(',')}`,
+  })
+  record('detail-progress-stream-is-cards', {
+    ok: detailState.progressItems >= 2,
+    detail: `${detailState.progressItems} progress card(s)`,
+  })
+  record('detail-evidence-is-a-real-link', { ok: detailState.evidenceLinks >= 1, detail: `${detailState.evidenceLinks} anchor(s)` })
+  record('detail-milestone-callout-flags-the-missing-next-step', {
+    ok: detailState.milestoneCallout === 'false',
+    detail: `data-present=${detailState.milestoneCallout}`,
+  })
+  record('detail-next-step-block-distinguishes-empty', {
+    ok: detailState.nextBlocks >= 1 && detailState.emptyNext >= 1,
+    detail: `${detailState.nextBlocks} next block(s), ${detailState.emptyNext} flagged empty`,
+  })
+  record('detail-sections-are-purpose-built', {
+    ok: ['进展流', '四维结果', 'G0 必填完整度', '计划（G1 / G2）', '结论'].every((label) => detailState.sections.includes(label)),
     detail: detailState.sections.join(' | '),
   })
   const detailShot = await page.shot('work-dashboard-detail.png')
 
-  // 10. BACK, then the refresh settings dialog.
-  await clickNamed(page, '← 返回')
+  // 11. ESCAPE returns to the overview without a reload.
+  await page.evaluate(`(() => {
+    const shell = document.querySelector('.wd-shell');
+    shell?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    return true;
+  })()`)
   await page.wait(900)
-  record('back-to-overview', { ok: (await page.evaluate(CONSOLE_STATE)).rows === 3 })
+  record('keyboard-escape-returns-to-the-overview', { ok: (await page.evaluate(CONSOLE_STATE)).cards === 5 })
+
+  // 12. BACK from the detail page, then the three overview readings as evidence.
+  await page.evaluate(`(() => {
+    const back = [...document.querySelectorAll('.dt-rail button')].find((b) => (b.innerText || '').trim() === '← 返回');
+    if (back) { back.click(); return 'clicked'; }
+    const shell = document.querySelector('.wd-shell');
+    shell?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    return 'escaped';
+  })()`)
+  await page.wait(900)
+  record('back-to-overview', { ok: (await page.evaluate(CONSOLE_STATE)).cards === 5 })
+  await switchTo('卡片')
+  await page.wait(500)
+  const cardsShot = await page.shot('work-dashboard-cards.png')
+  await switchTo('看板')
+  await page.wait(500)
+  const boardShot = await page.shot('work-dashboard-board.png')
+  await switchTo('表格')
+  await page.wait(500)
+  const tableShot = await page.shot('work-dashboard-table.png')
+  await switchTo('卡片')
+  await page.wait(400)
 
   await clickNamed(page, '刷新设置')
   await page.wait(500)
@@ -428,6 +665,7 @@ try {
     console: !!document.querySelector('.wd-shell'),
     emptyTitle: document.querySelector('.empty-title')?.textContent ?? null,
     rows: document.querySelectorAll('.project-row').length,
+    cards: document.querySelectorAll('.pcard').length,
     interval: localStorage.getItem('work-dashboard.refreshInterval'),
     footer: document.querySelector('.page-footer')?.textContent ?? null,
   }))()`)
@@ -438,8 +676,8 @@ try {
   // A reload is a fresh page, not a fresh Host: the cache is still there, so the
   // board re-renders from the existing clone without another pull.
   record('console-remounts-after-reload', {
-    ok: afterReload.console === true && afterReload.rows === 3,
-    detail: `rows=${afterReload.rows} emptyTitle=${afterReload.emptyTitle}`,
+    ok: afterReload.console === true && afterReload.cards === 5,
+    detail: `cards=${afterReload.cards} emptyTitle=${afterReload.emptyTitle}`,
   })
 
   // 13. ERROR STATE: the failure banner must carry a reason and a retry button.
@@ -483,22 +721,12 @@ try {
   const retryVisible = await page.evaluate(BUTTON_NAMED('重试'))
   record('refresh-failure-offers-retry', { ok: retryVisible !== null, detail: retryVisible === null ? 'no retry button' : '重试 present' })
   const boardSurvives = await page.evaluate(CONSOLE_STATE)
-  record('failure-keeps-the-board-visible', { ok: boardSurvives.rows === 3, detail: `${boardSurvives.rows} row(s) still rendered` })
+  record('failure-keeps-the-board-visible', { ok: boardSurvives.cards === 5, detail: `${boardSurvives.cards} card(s) still rendered` })
   const failureShot = await page.shot('work-dashboard-failure.png')
   // Restore the owned clone so the remaining checks run against a healthy source.
   await writeFile(repoGitConfig, original, 'utf8')
   await clickNamed(page, '重试')
   await page.wait(3000)
-
-  // The failure test left the page wherever it was when the refresh failed
-  // (the detail page). Return to the overview before the milestone-2 checks,
-  // because the import/create entries live in the OVERVIEW header.
-  const backAfterFailure = await page.evaluate(BUTTON_NAMED('← 返回'))
-  if (backAfterFailure !== null) {
-    await page.click(backAfterFailure.x, backAfterFailure.y)
-    await page.wait(1000)
-  }
-  await waitFor(async () => (await page.evaluate(`!!document.querySelector('.stat-grid')`)) === true, 'the overview never came back')
 
   // ---- milestone 3: risk board, timeline
   const riskEntry = await page.evaluate(HEADER_ACTION('风险看板'))
@@ -510,14 +738,27 @@ try {
     })()`)
     await waitFor(async () => (await page.evaluate(`document.querySelectorAll('.risk-row').length`)) > 0, 'the risk board never mounted')
     const riskBoard = await page.evaluate(`(() => ({
-      levels: [...document.querySelectorAll('.risk-row')].map((row) => row.getAttribute('data-level')),
+      lanes: [...document.querySelectorAll('.risk-lane')].map((lane) => ({ level: lane.getAttribute('data-level'), rows: lane.querySelectorAll('.risk-row').length })),
+      levels: [...document.querySelectorAll('.risk-lane')].map((lane) => lane.getAttribute('data-level')),
       names: [...document.querySelectorAll('.risk-name')].map((node) => node.textContent),
-      counters: [...document.querySelectorAll('.stat-value')].map((node) => node.textContent),
+      segbar: document.querySelectorAll('.segbar-seg').length,
+      barlist: document.querySelectorAll('.barlist-row').length,
+      figure: !!document.querySelector('.risk-figure'),
     }))()`)
-    const rankOrder = { high: 3, medium: 2, low: 1, unset: 0 }
-    const sorted = riskBoard.levels.every((level, index) => index === 0 || (rankOrder[riskBoard.levels[index - 1]] ?? 0) >= (rankOrder[level] ?? 0))
-    record('risk-board-sorted-by-severity', { ok: riskBoard.levels.length > 0 && sorted, detail: riskBoard.levels.join(' → ') })
-    record('risk-board-shows-counters', { ok: riskBoard.counters.length === 4, detail: riskBoard.counters.join('/') })
+    const laneOrder = { high: 3, medium: 2, low: 1, unset: 0 }
+    const sorted = riskBoard.levels.every((level, index) => index === 0 || (laneOrder[riskBoard.levels[index - 1]] ?? 0) >= (laneOrder[level] ?? 0))
+    record('risk-board-groups-into-severity-lanes', {
+      ok: riskBoard.lanes.length >= 2 && riskBoard.lanes.every((lane) => lane.rows > 0) && sorted,
+      detail: riskBoard.lanes.map((lane) => `${lane.level}:${lane.rows}`).join(' → '),
+    })
+    record('risk-board-shows-the-distribution-figure', {
+      ok: riskBoard.figure === true && riskBoard.segbar >= 2,
+      detail: `${riskBoard.segbar} severity segment(s)`,
+    })
+    record('risk-board-names-each-project', {
+      ok: riskBoard.names.length >= 2 && riskBoard.names.every((name) => name !== ''),
+      detail: riskBoard.names.join(' | '),
+    })
     const riskShot = await page.shot('work-dashboard-risks.png')
     await clickNamed(page, '← 返回')
     await page.wait(700)
@@ -531,20 +772,37 @@ try {
       const button = [...document.querySelectorAll('.header-actions button')].find((b) => (b.innerText || '').trim() === '时间线');
       button?.click();
     })()`)
-    await waitFor(async () => (await page.evaluate(`document.querySelectorAll('.timeline-item').length`)) > 0, 'the timeline never mounted')
+    await waitFor(async () => (await page.evaluate(`document.querySelectorAll('.tl-entry').length`)) > 0, 'the timeline never mounted')
     const timelineView = await page.evaluate(`(() => ({
-      dates: [...document.querySelectorAll('.timeline-date')].map((node) => node.textContent),
-      items: document.querySelectorAll('.timeline-item').length,
-      months: [...document.querySelectorAll('.month-label')].map((node) => node.textContent),
-      silent: document.body.textContent.includes('完全没有时间线'),
-      missingEvidence: [...document.querySelectorAll('.timeline-missing')].length,
+      dates: [...document.querySelectorAll('.tl-date')].map((node) => node.textContent),
+      items: document.querySelectorAll('.tl-entry').length,
+      months: [...document.querySelectorAll('.tl-month-label')].map((node) => node.textContent),
+      groups: document.querySelectorAll('.tl-month-group').length,
+      spark: document.querySelectorAll('.spark-cell').length,
+      silent: !!document.querySelector('.tl-silent'),
+      silentChips: document.querySelectorAll('.tl-chip-button').length,
+      missingEvidence: [...document.querySelectorAll('.tl-field-value[data-emphasis="missing"]')].length,
     }))()`)
-    record('timeline-renders-newest-first', {
+    record('timeline-groups-by-month', {
+      ok: timelineView.groups >= 2 && timelineView.months.length >= 2,
+      detail: `${timelineView.groups} month group(s): ${timelineView.months.join(', ')}`,
+    })
+    record('timeline-shows-monthly-distribution', {
+      ok: timelineView.spark >= 2,
+      detail: `${timelineView.spark} month bar(s)`,
+    })
+    record('timeline-renders-newest-first-inside-each-month', {
       ok: timelineView.items >= 3 && timelineView.dates[0] >= timelineView.dates[timelineView.dates.length - 1],
       detail: `${timelineView.items} entries, first=${timelineView.dates[0]}`,
     })
-    record('timeline-shows-month-strip', { ok: timelineView.months.length > 0, detail: timelineView.months.join(', ') })
-    record('timeline-names-silent-projects', { ok: timelineView.silent === true })
+    record('timeline-names-silent-projects', {
+      ok: timelineView.silent === true && timelineView.silentChips >= 1,
+      detail: `${timelineView.silentChips} silent project chip(s)`,
+    })
+    record('timeline-flags-a-round-with-no-evidence', {
+      ok: timelineView.missingEvidence >= 1,
+      detail: `${timelineView.missingEvidence} missing field(s)`,
+    })
     const timelineShot = await page.shot('work-dashboard-timeline.png')
     await clickNamed(page, '← 返回')
     await page.wait(700)
@@ -554,8 +812,16 @@ try {
   // A template placeholder that reached the DOM un-substituted is a rendering bug
   // (v1 keys like {tier} survived into v3 copy).
   const rawPlaceholders = await page.evaluate(`(() => {
-    const text = document.querySelector('.wd-shell')?.textContent ?? '';
-    return (text.match(/\\{[A-Za-z0-9_]+\\}/g) ?? []).slice(0, 5);
+    const hits = [];
+    for (const node of document.querySelectorAll('.wd-shell *')) {
+      if (node.children.length !== 0) continue;
+      const text = node.textContent ?? '';
+      for (const match of text.matchAll(/\\{[A-Za-z0-9_]+\\}/g)) {
+        hits.push(match[0] + ' @ ' + (node.className || node.tagName) + ' :: ' + text.slice(0, 60));
+      }
+      if (hits.length >= 6) break;
+    }
+    return hits.slice(0, 6);
   })()`)
   record('no-raw-template-placeholders', {
     ok: rawPlaceholders.length === 0,
@@ -564,6 +830,7 @@ try {
   record('no-uncaught-console-errors', { ok: Array.isArray(consoleErrors) && consoleErrors.length === 0, detail: `${Array.isArray(consoleErrors) ? consoleErrors.length : 'n/a'} error(s)` })
 
   // 14. Dark theme: the frame must follow the shell's dark theme through tokens.
+  await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] })
   const dark = await page.evaluate(`(() => {
     document.body.setAttribute('data-ds-dark-theme', '');
     const root = document.querySelector('.wd-shell');
@@ -578,7 +845,7 @@ try {
   })
   const darkShot = await page.shot('work-dashboard-dark.png')
 
-  process.stdout.write(`\nshots: ${emptyShot}, ${boardShot}, ${detailShot}, ${darkShot}\n`)
+  process.stdout.write(`\nshots: ${emptyShot}, ${cardsShot}, ${boardShot}, ${tableShot}, ${detailShot}, ${darkShot}\n`)
   process.stdout.write(`SUMMARY ${JSON.stringify({ total: results.length, failed: results.filter((item) => item.ok === false).length })}\n`)
 } finally {
   await page.close()
