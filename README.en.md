@@ -153,7 +153,8 @@ Consequences:
   detail page can check versions, show pre-releases, and update in place.
 
 npm publication runs through `.github/workflows/release.yml` with npm Trusted Publishing / OIDC (see
-`RELEASING.md`). **No version is published on the registry yet**, so only the Git channel works today; once
+`RELEASING.md`). **No version is published on the registry yet** — the local npm credential returns 401 and the
+repository has neither an `npm-publish` environment nor a Trusted Publisher, so only the Git channel works today; once
 it is published, switching to the npm channel is what unlocks in-place updates:
 
 1. remove the Git-installed bundle in Plugins;

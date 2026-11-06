@@ -1,20 +1,20 @@
 {
   "plugin": "@skillre/dsh-plugin-work-dashboard",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "dsh": "0.2.2-rc.1",
   "verifiedOn": "2026-11-06",
   "indexUrl": "https://skillre.github.io/dsh-plugin-market/index.json",
-  "installSpec": "git+https://github.com/skillre/dsh-plugin-work-dashboard#55b8d5b81231f82634d962306dae0bb82d4f178f",
-  "commit": "55b8d5b81231f82634d962306dae0bb82d4f178f",
+  "installSpec": "git+https://github.com/skillre/dsh-plugin-work-dashboard#6e28bb0fbbd5f4e3c801b71e95fad8f459c3481d",
+  "commit": "6e28bb0fbbd5f4e3c801b71e95fad8f459c3481d",
   "checks": [
     "live-index-has-entry",
     "live-index-pins-commit",
-    "dsh --profile poc-market-JSHaQx --from-default-profile",
+    "dsh --profile poc-market-JkEnqo --from-default-profile",
     "profile-created",
-    "dsh plugin --profile poc-market-JSHaQx",
+    "dsh plugin --profile poc-market-JkEnqo",
     "market-spec-installed",
     "dependency-and-selection",
-    "dsh --profile poc-market-JSHaQx --patch",
+    "dsh --profile poc-market-JkEnqo --patch",
     "dump-config",
     "packed-payload-present",
     "bounded-startup",
@@ -28,15 +28,15 @@
     "failed": 0
   },
   "cleanup": {
-    "ownedRoot": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-poc-market-install-JSHaQx",
+    "ownedRoot": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-poc-market-install-JkEnqo",
     "processesStopped": true,
     "rootRemoved": true,
     "verified": true
   },
   "notes": [
     "Installed the exact spec the LIVE market index generates for this plugin (git+URL#commit), not a local tarball.",
-    "The commit recorded here is the one the live index pins; the evidence file itself lands in a later commit, which does not change what the market serves.",
     "The Git entry is self-contained: lib/ is committed and there is no scripts.prepare, so installation runs no build step.",
+    "This entry is Git-sourced, so it does NOT appear in the plugin manager's Versions block; see README for the npm channel that does.",
     "The owned profile and its cache were removed afterwards and the removal was verified."
   ]
 }

@@ -251,7 +251,8 @@ DSH `0.2.2` 线起，插件详情页有「版本 / Versions」区块，能检查
   检查更新、看预发布版本、点「更新」原地升级。
 
 本插件的 npm 发布由 `.github/workflows/release.yml` 经 npm Trusted Publishing / OIDC 完成
-（见 `RELEASING.md`）。**当前 registry 上尚无发布版本**，所以此刻只有 Git 渠道可用；
+（见 `RELEASING.md`）。**当前 registry 上尚无发布版本**：本机 npm 凭据返回 401、仓库也未配置
+`npm-publish` 环境与 Trusted Publisher，所以此刻只有 Git 渠道可用；
 发布之后，切换到 npm 渠道才能拿到原地更新：
 
 1. 在 Plugins 里移除 Git 安装的 bundle；
