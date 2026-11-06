@@ -1,20 +1,20 @@
 {
   "plugin": "@skillre/dsh-plugin-work-dashboard",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "dsh": "0.2.2-rc.1",
   "verifiedOn": "2026-11-06",
   "indexUrl": "https://skillre.github.io/dsh-plugin-market/index.json",
-  "installSpec": "git+https://github.com/skillre/dsh-plugin-work-dashboard#343e7b784f209d221a5cb128451d777eea87daeb",
-  "commit": "343e7b784f209d221a5cb128451d777eea87daeb",
+  "installSpec": "git+https://github.com/skillre/dsh-plugin-work-dashboard#82ddae3061cfed0d78a0451ae3ccd4a3e3bacc43",
+  "commit": "82ddae3061cfed0d78a0451ae3ccd4a3e3bacc43",
   "checks": [
     "live-index-has-entry",
     "live-index-pins-commit",
-    "dsh --profile poc-market-ktWXwH --from-default-profile",
+    "dsh --profile poc-market-S4yavd --from-default-profile",
     "profile-created",
-    "dsh plugin --profile poc-market-ktWXwH",
+    "dsh plugin --profile poc-market-S4yavd",
     "market-spec-installed",
     "dependency-and-selection",
-    "dsh --profile poc-market-ktWXwH --patch",
+    "dsh --profile poc-market-S4yavd --patch",
     "dump-config",
     "packed-payload-present",
     "bounded-startup",
@@ -28,14 +28,14 @@
     "failed": 0
   },
   "cleanup": {
-    "ownedRoot": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-poc-market-install-ktWXwH",
+    "ownedRoot": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-poc-market-install-S4yavd",
     "processesStopped": true,
     "rootRemoved": true,
     "verified": true
   },
   "notes": [
     "Installed the exact spec the LIVE market index generates for this plugin (git+URL#commit), not a local tarball.",
-    "The Git entry is self-contained: lib/ is committed and there is no scripts.prepare, so installation runs no build step.",
+    "The three POC skills ship inside the package, so this install is also what publishes them.",
     "This entry is Git-sourced, so it does NOT appear in the plugin manager's Versions block; see README for the npm channel that does.",
     "The owned profile and its cache were removed afterwards and the removal was verified."
   ]
