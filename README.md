@@ -216,9 +216,9 @@ POC 台账最容易烂在「感觉做成了」上：项目说结果达成，但�
 
 ## 安装
 
-### 从插件市场安装（推荐）
+**安装动作由你完成**：插件管理器里选来源、点确认。本插件不代装。
 
-本插件已发布到 `skillre` 的自建插件市场索引（Git 源，非 npm）：
+### 从插件市场安装
 
 ```
 https://skillre.github.io/dsh-plugin-market/index.json
@@ -226,20 +226,49 @@ https://skillre.github.io/dsh-plugin-market/index.json
 
 1. DSH Web → **Plugins** → **More**（Experimental plugins）→ 启用 **Custom plugin markets**；
 2. 出现 **Discover** 标签页 → **Index sources** → **Add index source** → 粘贴上面的 URL；
-3. 在 Discover 里找到 **工作看板**，确认来源为 Git 仓库后点 **Install**。
+3. 在 Discover 里找到 **工作看板**，确认来源后点 **Install**。
 
-索引里的版本钉在具体提交（`git+https://github.com/skillre/dsh-plugin-work-dashboard#<commit>`），仓库自包含：`lib/` 已提交、无 `scripts.prepare`，安装不会执行构建脚本。
+索引里的版本钉在具体提交（`git+https://github.com/skillre/dsh-plugin-work-dashboard#<commit>`），
+仓库自包含：`lib/` 已提交、无 `scripts.prepare`，安装不会执行构建脚本。
+
+### 更新机制（重要）
+
+DSH `0.2.2` 线起，插件详情页有「版本 / Versions」区块，能检查并原地更新。**但它只覆盖从 npm registry
+安装的第三方插件**——判定条件有四条，必须同时满足（见舰队 `docs/update-mechanism.md`）：
+
+| 条件 | 本插件现状 |
+|---|---|
+| 第三方 bundle（非官方自带） | ✅ |
+| profile 依赖是**以自己包名**保存的 registry spec | ⚠️ 见下 |
+| 已装 manifest 的 `version` 是合法 SemVer | ✅ `0.4.0` |
+| 包内不含 `PROTECTED_PLUGINS` 管理行 | ✅ 只声明 `skillre-work-dashboard` 一行 |
+
+因此：
+
+- **从市场（Git 源）安装**：出现在 Installed 列表里，但**不会**出现「版本」区块。升级只能
+  **卸载 → 重新从市场安装**。这是 DSH 的判定结果，不是本插件的选择。
+- **从 npm 安装**（`@skillre/dsh-plugin-work-dashboard`）：才进入官方更新机制，可以在详情页
+  检查更新、看预发布版本、点「更新」原地升级。
+
+本插件的 npm 发布由 `.github/workflows/release.yml` 经 npm Trusted Publishing / OIDC 完成
+（见 `RELEASING.md`）。**当前 registry 上尚无发布版本**，所以此刻只有 Git 渠道可用；
+发布之后，切换到 npm 渠道才能拿到原地更新：
+
+1. 在 Plugins 里移除 Git 安装的 bundle；
+2. 在安装对话框输入 `@skillre/dsh-plugin-work-dashboard@0.4.0`（或更高）；
+3. 之后详情页才会出现「版本」区块。
 
 ### 用本地包
 
-未发布到 npm 时，用构建出的 `.tgz` 绝对路径（见下方「构建与自测」），由你在插件管理器中选择安装来源。
+用构建出的 `.tgz` 绝对路径（见下方「构建与自测」），由你在插件管理器中选择安装来源。
+本地包同样**不进**官方更新机制。
 
 ## 构建与自测
 
 ```sh
 npm install
 npm run check                     # typecheck + 172 个单测 + lib 漂移检查 + 打包检查
-npm pack                          # 产出 skillre-dsh-plugin-work-dashboard-0.3.0.tgz
+npm pack                          # 产出 skillre-dsh-plugin-work-dashboard-0.4.0.tgz
 ```
 
 **仅使用自己拥有的、可丢弃的非 Desktop profile**做真实挂载验证：

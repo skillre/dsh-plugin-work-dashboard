@@ -1,13 +1,25 @@
 {
   "plugin": "@skillre/dsh-plugin-work-dashboard",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "dsh": "0.2.2-rc.1",
   "verifiedOn": "2026-11-06",
   "surface": "DSH Web app (existing app instance, owned disposable profile)",
-  "viewports": [{ "width": 1440, "height": 900, "deviceScaleFactor": 2 }],
-  "themes": ["light", "dark"],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900,
+      "deviceScaleFactor": 2
+    }
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
   "harness": "scripts/ui-verify.mjs over CDP against scripts/ui-preview.mjs",
-  "summary": { "total": 69, "failed": 0 },
+  "summary": {
+    "total": 69,
+    "failed": 0
+  },
   "highlights": [
     "The portfolio band renders six figures, each a chart, each a filter.",
     "The three overview readings (cards, board, table) hold the same project set.",
@@ -32,5 +44,17 @@
     "The harness pins prefers-color-scheme to light for the evidence shots, then flips to dark explicitly for the dark-theme assertion, so evidence describes the plugin rather than the machine it ran on.",
     "The harness rebuilds and repacks the tarball before each run: the preview installs the packed artifact, so verifying without a rebuild would verify the previous build.",
     "A run must start from a freshly booted Host: the console wipes its cache at mount, so the empty-state assertions only hold on the first paint."
-  ]
+  ],
+  "displayContract": {
+    "detailPages": [
+      "docs/DETAIL.md",
+      "docs/DETAIL.zh.md"
+    ],
+    "previews": [
+      "docs/preview.svg",
+      "docs/preview.zh.svg"
+    ],
+    "previewAspect": "640x300 (2.13:1)",
+    "note": "Both detail pages carry exactly one preview image; the artwork shows the real interface and passes scripts/preview.mjs check."
+  }
 }

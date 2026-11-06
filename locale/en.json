@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Work Dashboard",
-    "description": "A multi-module operations dashboard. POC Operations is the first module: a portfolio band, cards/board/table readings of the project list, a progress-stream detail page, the twelve gap rules, a risk board and a global timeline, on the v3 data model."
+    "description": "An operations board in the sidebar: portfolio charts, three project views, progress-stream details and 12 gap rules.",
+    "detail": "docs/DETAIL.md"
   }
 }

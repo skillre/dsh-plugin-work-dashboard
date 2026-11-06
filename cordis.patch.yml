@@ -20,4 +20,5 @@
         defaultBranch: main
         cloneTimeoutMs: 120000
         fetchTimeoutMs: 60000
-        staleDays: 30
+        # Days in one stage before gap rule R12 reports the project as stalled.
+        stallDays: 45

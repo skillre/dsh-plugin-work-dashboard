@@ -1,0 +1,1 @@
+![Work Dashboard preview: the DSH sidebar with "Work Dashboard" selected, a portfolio band of six figures in the centre, three project cards with stage rails and gap badges below, and the pending list on the right](preview.svg)

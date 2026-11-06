@@ -120,19 +120,54 @@ The cache is wiped on every Host start and rebuilt by the first Refresh; the mar
 
 ## Install
 
-**Final installation belongs to the user.** In the DSH Desktop Client or Web UI, open **Plugins**, then either:
+**Final installation belongs to the user.** Open **Plugins** in the DSH Desktop Client or Web UI and choose the source yourself.
 
-- add the market index `https://skillre.github.io/dsh-plugin-market/index.json` under **Discover → Index sources** and install **Work Dashboard** from there; or
-- install the npm spec `@skillre/dsh-plugin-work-dashboard@0.3.0` once it is published.
+### From the plugin market
 
-To update, uninstall and reinstall: DSH does not upgrade a bundle in place today.
+```
+https://skillre.github.io/dsh-plugin-market/index.json
+```
+
+Add it under **Discover → Index sources**, then install **Work Dashboard** from Discover. The index pins a
+specific commit (`git+https://github.com/skillre/dsh-plugin-work-dashboard#<commit>`); the repository is
+self-contained (`lib/` is committed, there is no `scripts.prepare`), so installation runs no build step.
+
+### Update mechanism (important)
+
+Since the DSH `0.2.2` line, the bundle detail page has a **Versions** block that can check for and install
+updates in place. It covers **third-party plugins installed from the npm registry** only — four conditions
+must all hold (see the fleet's `docs/update-mechanism.md`):
+
+| Condition | This plugin |
+|---|---|
+| Third-party bundle (not a shipped official one) | yes |
+| The profile dependency is a registry spec saved under the package's own name | see below |
+| The installed manifest's `version` parses as SemVer | yes, `0.4.0` |
+| The package ships no `PROTECTED_PLUGINS` management row | yes, only `skillre-work-dashboard` |
+
+Consequences:
+
+- **Installed from the market (Git source)**: it appears under Installed but has **no Versions block**.
+  Upgrading means **uninstall → reinstall from the market**. That is DSH's verdict, not this plugin's choice.
+- **Installed from npm** (`@skillre/dsh-plugin-work-dashboard`): it enters the official update path, so the
+  detail page can check versions, show pre-releases, and update in place.
+
+npm publication runs through `.github/workflows/release.yml` with npm Trusted Publishing / OIDC (see
+`RELEASING.md`). **No version is published on the registry yet**, so only the Git channel works today; once
+it is published, switching to the npm channel is what unlocks in-place updates:
+
+1. remove the Git-installed bundle in Plugins;
+2. enter `@skillre/dsh-plugin-work-dashboard@0.4.0` (or newer) in the install dialog;
+3. only then does the detail page gain its Versions block.
+
+A local tarball is likewise **outside** the official update path.
 
 ## Development verification
 
 ```sh
 npm install
 npm run check                     # typecheck + 172 unit tests + lib-drift check + pack check
-npm pack                          # produces skillre-dsh-plugin-work-dashboard-0.3.0.tgz
+npm pack                          # produces skillre-dsh-plugin-work-dashboard-0.4.0.tgz
 ```
 
 Real mount verification **only against an owned, disposable, non-Desktop profile**:

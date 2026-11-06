@@ -11,6 +11,29 @@ Publishing, tags, releases, Trusted Publisher changes and remote writes require 
 5. Create the protected `npm-publish` GitHub Environment with a human reviewer and `main` restriction.
 6. Set repository variable `NPM_TRUSTED_PUBLISHING_READY=true` only after the publisher configuration matches exactly.
 
+## Why npm is the only update channel
+
+The plugin manager's Versions block (`listVersions` / `updateBundle`, DSH `0.2.2-alpha.2` onward) refuses to
+update anything that is not a third-party bundle installed from the registry under its own package name. A
+`github:` / `git+` / `file:` / tarball install never appears there, so the only way to update it is uninstall
+and reinstall. That is why publishing to npm is not just distribution — it is the update mechanism itself.
+
+Two things this repository must therefore keep true, or it silently loses updatability:
+
+- `cordis.patch.yml` declares no `PROTECTED_PLUGINS` management row (`@deepseek-ai/dsh-plugin-manager`,
+  `cordis-plugin-loader`, `dsh-api-gateway`, …). A bundle shipping one becomes unremovable and with it
+  un-updatable.
+- `engines.dsh` stays honest. An update candidate is first checked against `engines.dsh` (falling back to the
+  `@deepseek-ai/dsh*` peers), so a range that is too wide gets rejected as `incompatible-version` and one that
+  is too narrow blocks versions that would work. It states the DSH line this package was really mounted and
+  tested against, and must be re-verified rather than widened on a guess.
+
+Update semantics, as documented for users: versions only move forward; the target is stored as an exact
+version (and a failed update restores the previous exact version, even if the original spec was a range); an
+update is two profile operations (remove + install) so the bundle may land at the end of the list under HMR;
+a failure rolls back, and if the rollback itself fails the package is left uninstalled. The plugin page has no
+entry for version exemptions — only the CLI and agent tools do.
+
 ## Every release
 
 1. Include a Changeset with the feature/fix PR.

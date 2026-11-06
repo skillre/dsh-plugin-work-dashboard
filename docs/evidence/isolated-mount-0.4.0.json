@@ -1,0 +1,106 @@
+{
+  "package": "@skillre/dsh-plugin-work-dashboard",
+  "version": "0.4.0",
+  "dsh": "0.2.2-rc.1",
+  "tarball": {
+    "path": "/Users/skillre/dsh-plugins/repos/dsh-plugin-work-dashboard/skillre-dsh-plugin-work-dashboard-0.4.0.tgz",
+    "sha256": "1af631043c52856d3ab34889b055bed22967e8d703d9d1b1a3c2dad5fd1d19fc"
+  },
+  "profile": "work-dashboard-test-44b38161",
+  "checks": [
+    "command: dsh --version -> exit 0",
+    "dsh-version",
+    "local-remote-and-gh-stub",
+    "command: dsh --profile work-dashboard-test-44b38161 --from-default-profile web --dump-config -> exit 0",
+    "profile-template-created",
+    "command: dsh plugin --profile work-dashboard-test-44b38161 add /Users/skillre/dsh-plugins/repos/dsh-plugin-work-dashboard/skillre-dsh-plugin-work-dashboard-0.4.0.tgz --ignore-scripts --store-dir /private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-work-dashboard-mount-WVSNnO/pnpm-store -> exit 0",
+    "profile-tarball-install",
+    "packed-dependency-and-selection",
+    "command: dsh --profile work-dashboard-test-44b38161 --patch /private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-work-dashboard-mount-WVSNnO/owned-cache.patch.yml --dump-config -> exit 0",
+    "dump-config",
+    "packed-payload-present",
+    "cache-absent-before-mount",
+    "bounded-startup",
+    "api-cold-cache-empty",
+    "api-refresh-clone",
+    "api-board-computed",
+    "api-portfolio-analysis",
+    "api-detail",
+    "api-refresh-fetch",
+    "api-unknown-project",
+    "api-auth-fence",
+    "cache-is-real-clone",
+    "cache-credential-not-persisted",
+    "api-risk-board-sorted",
+    "api-global-timeline-sorted",
+    "api-timeline-reports-silent-projects",
+    "refresh-works-after-submit",
+    "cache-wiped-on-restart",
+    "api-refresh-after-restart"
+  ],
+  "endpoint": {
+    "cold": {
+      "cacheReady": false,
+      "cachePath": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-work-dashboard-mount-WVSNnO/home/cache/work-dashboard/repo"
+    },
+    "refresh1": {
+      "mode": "clone",
+      "projects": 5,
+      "durationMs": 822
+    },
+    "board": {
+      "stats": {
+        "total": 5,
+        "g0Passed": 4,
+        "inProgress": 4,
+        "amountTotalWan": 3100,
+        "g0Complete": 4,
+        "awaitingCustomer": 0,
+        "succeeded": 1,
+        "stopped": 1
+      },
+      "gaps": 12,
+      "firstRule": "R11-no-next-milestone"
+    },
+    "analysis": {
+      "stages": [
+        "G0:1",
+        "G1:1",
+        "G2:1",
+        "G3:0",
+        "G4:1",
+        "closed:1",
+        "unknown:0"
+      ],
+      "orgs": 5,
+      "topAmount": 1500
+    },
+    "detail": {
+      "progress": 2,
+      "achievement": "达成"
+    },
+    "risks": {
+      "rows": 6,
+      "counts": {
+        "high": 2,
+        "medium": 3,
+        "low": 1,
+        "unset": 0,
+        "total": 6
+      }
+    },
+    "timeline": {
+      "entries": 4,
+      "months": 4,
+      "silent": 2
+    }
+  },
+  "cleanup": {
+    "ownedRoot": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-work-dashboard-mount-WVSNnO",
+    "profile": "work-dashboard-test-44b38161",
+    "processesStopped": true,
+    "rootRemoved": true,
+    "verified": true
+  },
+  "verifiedOn": "2026-11-06"
+}

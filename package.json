@@ -1,6 +1,6 @@
 {
   "name": "@skillre/dsh-plugin-work-dashboard",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "工作看板：多模块运营看板，POC 运营为首个模块（四维结果、阶段轨道、缺口清单、风险看板、时间线、导出表单）",
   "icon": "./icon.svg",
   "type": "module",
@@ -31,6 +31,8 @@
     "lib/",
     "cordis.patch.yml",
     "compatibility.json",
+    "docs",
+    "!docs/evidence",
     "locale/*.json",
     "icon.svg",
     "README.md",
@@ -81,13 +83,14 @@
     "test": "npm run build:client && vitest run",
     "build:client": "node scripts/build-client.mjs",
     "pack:check": "npm run build && publint && npm pack --dry-run --json --ignore-scripts",
-    "check": "npm run typecheck && npm test && npm run check:lib && npm run pack:check",
+    "check": "npm run preview:check && npm run typecheck && npm test && npm run check:lib && npm run pack:check",
     "changeset": "changeset",
     "version": "changeset version",
     "release:prepare": "node scripts/prepare-release.mjs",
     "prepack": "npm run build",
     "test:integration": "node scripts/verify-isolated.mjs",
-    "check:lib": "npm run build && node scripts/verify-lib-committed.mjs"
+    "check:lib": "npm run build && node scripts/verify-lib-committed.mjs",
+    "preview:check": "node scripts/preview.mjs check"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.1.0"

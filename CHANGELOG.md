@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.4.0
+
+### Minor Changes
+
+- Adopt the fleet display contract and document the real update mechanism.
+  
+  **Display contract (the plugin card and detail page)**
+  
+  - `locale/{zh,en}.json` now carry `meta.detail`, and both descriptions were
+    rewritten to the card-subtitle budget (≤120 characters). The English one was
+    over budget at 249 and would have been truncated in the plugin list.
+  - `docs/DETAIL.zh.md` / `docs/DETAIL.md` hold exactly one preview image each, as
+    the contract requires; the long-form content stays in the README.
+  - `docs/preview.zh.svg` / `docs/preview.svg` are new 640×300 artwork showing the
+    real interface: the DSH window with the sidebar entry selected, the six-figure
+    portfolio band, three project cards and the rule-grouped pending rail. They are
+    hand-authored to the parser's allowed element set (no `<pattern>`, `<clipPath>`,
+    `<mask>`, `<image>`; text as `<text>`; orthogonal polylines).
+  - `docs/PREVIEW.md` records the whiteboard round-trip and what the artwork shows.
+  - `package.json#files` ships `docs` (the detail page reads the image from the
+    package directory, so without it the page would render blank with no error) but
+    excludes `docs/evidence`, which is 3.3 MB of verification screenshots that
+    belong in the repository, not in every install.
+  - `scripts/preview.mjs` plus `preview:check` are wired into `npm run check`, so a
+    broken preview now fails the build instead of shipping blank.
+  
+  **Update mechanism**
+  
+  - Fixed a real bug: `cordis.patch.yml` still declared `staleDays: 30`, a key the
+    schema no longer has. Schemastery accepts unknown keys, so the row mounted and
+    silently produced `stallDays` at its default instead of the configured value.
+    It now declares `stallDays: 45`.
+  - README (both languages) and `RELEASING.md` now state the actual update rules
+    instead of implying updates work everywhere: the plugin manager's Versions
+    block only covers third-party bundles installed from the npm registry under
+    their own package name. A market (Git) install has no Versions block and can
+    only be upgraded by uninstall + reinstall. The npm channel is therefore the
+    update mechanism, not just distribution, and the docs say how to switch.
+  - Documented the two invariants that keep updatability: no `PROTECTED_PLUGINS`
+    management row in the bundle patch, and an honest `engines.dsh`.
+
 ## 0.3.0
 
 ### Minor Changes
