@@ -309,12 +309,12 @@ describe('cache directory safety', () => {
     expect(() => assertSafeCacheRoot('/Users/u', '/Users/u')).toThrow(/home directory/)
     expect(() => assertSafeCacheRoot('/tmp', '/Users/u')).toThrow(/too shallow/)
     expect(() => assertSafeCacheRoot('', '/Users/u')).toThrow(/empty/)
-    expect(assertSafeCacheRoot('/Users/u/.dsh/cache/poc-console', '/Users/u')).toBe('/Users/u/.dsh/cache/poc-console')
+    expect(assertSafeCacheRoot('/Users/u/.dsh/cache/work-dashboard', '/Users/u')).toBe('/Users/u/.dsh/cache/work-dashboard')
   })
 
   it('wipes a cache it created and recreates the marker', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'poc-cache-test-'))
-    const cacheRoot = join(dir, 'poc-console')
+    const cacheRoot = join(dir, 'work-dashboard')
     try {
       const cache = new RepoCache({ cacheRoot, repository: 'skillre/workbranch', branch: 'main', cloneTimeoutMs: 1000, fetchTimeoutMs: 1000, remoteUrl: 'https://github.com/skillre/workbranch.git' })
       await cache.prepare()
@@ -334,7 +334,7 @@ describe('cache directory safety', () => {
     const readOnly = join(dir, 'ro')
     await mkdir(readOnly)
     await (await import('node:fs/promises')).chmod(readOnly, 0o500)
-    const cache = new RepoCache({ cacheRoot: join(readOnly, 'poc-console'), repository: 'skillre/workbranch', branch: 'main', cloneTimeoutMs: 1000, fetchTimeoutMs: 1000, remoteUrl: 'https://github.com/skillre/workbranch.git' })
+    const cache = new RepoCache({ cacheRoot: join(readOnly, 'work-dashboard'), repository: 'skillre/workbranch', branch: 'main', cloneTimeoutMs: 1000, fetchTimeoutMs: 1000, remoteUrl: 'https://github.com/skillre/workbranch.git' })
     try {
       const error = await cache.prepare().then(() => null, (caught: unknown) => caught)
       expect(error).toBeInstanceOf(RepoError)

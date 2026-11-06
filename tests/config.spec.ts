@@ -22,9 +22,9 @@ describe('resolveConfig', () => {
   })
 
   it('keeps a valid override', () => {
-    const config = resolveConfig({ repository: 'skillre/other-repo', cacheRoot: '/tmp/poc-console-cache', staleDays: 7 })
+    const config = resolveConfig({ repository: 'skillre/other-repo', cacheRoot: '/tmp/work-dashboard-cache', staleDays: 7 })
     expect(config.repository).toBe('skillre/other-repo')
-    expect(config.cacheRoot).toBe('/tmp/poc-console-cache')
+    expect(config.cacheRoot).toBe('/tmp/work-dashboard-cache')
     expect(config.staleDays).toBe(7)
   })
 
@@ -65,7 +65,7 @@ describe('remoteUrlFor', () => {
 
 describe('expandHome', () => {
   it('expands only a leading tilde', () => {
-    expect(expandHome('~/.dsh/cache/poc-console', '/home/u')).toBe('/home/u/.dsh/cache/poc-console')
+    expect(expandHome('~/.dsh/cache/work-dashboard', '/home/u')).toBe('/home/u/.dsh/cache/work-dashboard')
     expect(expandHome('~', '/home/u')).toBe('/home/u')
     expect(expandHome('/abs/path', '/home/u')).toBe('/abs/path')
     expect(expandHome('/a/~/b', '/home/u')).toBe('/a/~/b')

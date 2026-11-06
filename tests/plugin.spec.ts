@@ -30,7 +30,7 @@ function contextWith(services: Record<string, unknown>) {
 
 /** A unique cache root per test, so parallel files cannot collide. */
 function cacheRoot(suffix: string): string {
-  return `${process.env.TMPDIR ?? '/tmp'}/poc-console-unit-${suffix}-${Date.now()}`
+  return `${process.env.TMPDIR ?? '/tmp'}/work-dashboard-unit-${suffix}-${Date.now()}`
 }
 
 describe('mount contract', () => {
