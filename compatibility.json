@@ -92,27 +92,31 @@
       ],
       "notes": "Packed tarball 0.1.0 installed into an owned, disposable, non-Desktop web profile (DSH 0.2.2-rc.1). This release migrates the plugin to the v3 POC data model. The parser reads identity + gate0 + plan + progress[] + outcome; the four dimensions come from `outcome`; the progress stream is a new core view; the gap rule set grew from 8 to 12 (R1-R12); and the stat strip is now POC总数 / G0通过 / 进行中 / 金额合计. The v3 numbers were verified against the real ledger data first: 23 projects, 6050万 total, 1 G0 passed, 0 G0 complete, R1 on all 23, R2 on 7 — matching the update note's acceptance list exactly. dsh --profile <test> --dump-config composed the row; a bounded real startup served the Web app; the authenticated transport exercised the exact /api/skillre-work-dashboard/execute route (cold cache empty, manual refresh cloned the ledger, board computed v3 summaries and gaps, detail returned the progress stream, a second refresh used fetch + reset --hard, unknown project and unauthenticated request failed cleanly), and cleanup removed the owned profile with verified absence. The real DSH Web UI was then driven in headless Chromium: 43/43 assertions passed, including the seven-column v3 table, the amount column, the latest-progress column, the progress-stream section, four separate dimension cards, the twelve-rule pending list, and a new guard that no raw template placeholder reaches the DOM. Two real defects were caught during that verification and fixed: gap TITLES were rendered through t() instead of format() so parameterised titles leaked literal {amountWan}; and the detail identity line still carried the removed v1 {tier} key. The export form is deliberately hidden in this release: it still models v1 fields, and shipping it would hand colleagues YAML the v3 ledger cannot read. It is preserved at src/form.v1-deferred.ts for the P1 rewrite. The published 0.2.0 market entry was then verified end to end: the LIVE hosted index listed 工作看板 0.2.0, its own install spec (git+https://github.com/skillre/dsh-plugin-work-dashboard#42b7c9f2bf951cdd1715feda48b47bf81286bc0c) was installed into a fresh owned profile, --dump-config composed the row, a bounded startup served the app, and list/detail/risks/timeline all answered (detail correctly reported unknown-project on the cold cache). Cleanup removed the owned profile and verified it was gone.",
       "evidence": [
-        "docs/evidence/isolated-mount-0.1.0.json",
+        "docs/evidence/isolated-mount-0.3.0.json",
         "docs/evidence/ui-verification.json",
+        "docs/evidence/market-install-0.3.0.json",
         "docs/evidence/work-dashboard-empty.png",
+        "docs/evidence/work-dashboard-cards.png",
         "docs/evidence/work-dashboard-board.png",
+        "docs/evidence/work-dashboard-table.png",
         "docs/evidence/work-dashboard-detail.png",
-        "docs/evidence/work-dashboard-light.png",
+        "docs/evidence/work-dashboard-risks.png",
+        "docs/evidence/work-dashboard-timeline.png",
+        "docs/evidence/work-dashboard-failure.png",
         "docs/evidence/work-dashboard-dark.png",
-        "tests/gap.spec.ts",
         "tests/store.spec.ts",
+        "tests/gap.spec.ts",
+        "tests/view.spec.tsx",
+        "tests/text.spec.ts",
         "tests/transport.spec.ts",
         "tests/plugin.spec.ts",
         "tests/client-bundle.spec.ts",
-        "tests/view.spec.tsx",
         "tests/preferences.spec.ts",
         "tests/config.spec.ts",
-        "tests/form.spec.ts",
         "tests/risks.spec.ts",
-        "tests/timeline.spec.ts",
-        "docs/evidence/market-install-0.1.0.json",
-        "docs/evidence/market-install-0.2.0.json"
-      ]
+        "tests/timeline.spec.ts"
+      ],
+      "note": "Packed tarball 0.3.0 installed into an owned, disposable, non-Desktop web profile (DSH 0.2.2-rc.1). This release redesigns the console rather than the data model: the four flat counters became a six-figure portfolio band (stage funnel, system/company amount breakdown, poc_type donut, amount concentration, four-dimension coverage, gap-rule hits), each figure doubling as a filter; the project list gained three readings (cards, board, table) over one filtered+sorted list from the shell; and the detail page became two panes (sticky identity rail plus a scrolling reading pane whose sections are a progress stream, a four-dimension grid with origin tags, a five-cell G0 meter, a criteria table and a milestone callout). Charts are hand-built SVG/flex because the client bundle may only externalise `react`; no charting dependency was added. dsh --profile <test> --dump-config composed the row; a bounded real startup served the Web app; the authenticated transport exercised the exact /api/skillre-work-dashboard/execute route, and the snapshot now carries the Host-computed portfolio analysis and the G0 checklist (verified: every project lands in exactly one stage bucket, funnel amounts sum to the portfolio total, rule counts account for every finding). Cleanup removed the owned profile with verified absence. The real DSH Web UI was then driven in headless Chromium at 1440x900: 69/69 assertions passed, covering the band, the three readings, search and filter chips, keyboard cursor/Enter/Escape, the sticky rail, the G0 meter, progress cards with real evidence anchors, the milestone callout, severity lanes, month-grouped timeline, and two guards (no raw template placeholders, no uncaught console errors). The design requirement that drove the band's two-strip layout is itself asserted: the project list starts at 705px of a 900px viewport, so it is visible without scrolling. The published 0.3.0 market entry was verified end to end against the LIVE hosted index: its own install spec (git+https://github.com/skillre/dsh-plugin-work-dashboard#d8d5a26d6c57eb74d36bf841d7828d17a47fe755) was installed into a fresh owned profile, --dump-config composed the row, a bounded startup served the app, and list/detail/risks/timeline all answered (detail correctly reported unknown-project on the cold cache). Cleanup removed the owned profile and verified it was gone. Desktop Client (Electron) visual verification was not performed; see observations."
     }
   ],
   "observations": {
