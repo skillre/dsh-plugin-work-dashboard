@@ -1,6 +1,6 @@
 {
   "plugin": "@skillre/dsh-plugin-work-dashboard",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "dsh": "0.2.2-rc.1",
   "verifiedOn": "2026-11-06",
   "surface": "DSH Web app (existing app instance, owned disposable profile)",
@@ -56,5 +56,19 @@
     ],
     "previewAspect": "640x300 (2.13:1)",
     "note": "Both detail pages carry exactly one preview image; the artwork shows the real interface and passes scripts/preview.mjs check."
+  },
+  "bundledSkills": {
+    "names": [
+      "poc-ledger",
+      "poc-export",
+      "poc-submit"
+    ],
+    "registeredAtRuntime": true,
+    "exportFormVerifiedInBrowser": [
+      "autosave to localStorage",
+      "live gap counting",
+      "focus preserved while typing",
+      "draft restored after reload"
+    ]
   }
 }

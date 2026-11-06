@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Work Dashboard",
-    "description": "An operations board in the sidebar: portfolio charts, three project views, progress-stream details and 12 gap rules.",
+    "description": "An operations board plus three bundled POC skills: read the ledger, export a form, submit colleague data as a Draft PR.",
     "detail": "docs/DETAIL.md"
   }
 }

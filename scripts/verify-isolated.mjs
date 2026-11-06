@@ -222,10 +222,29 @@ try {
   assert.ok(installed.startsWith(`${owned}/`), 'Installed package escaped the owned root')
   const installedManifest = JSON.parse(await readFile(join(installed, 'package.json'), 'utf8'))
   assert.equal(installedManifest.version, manifest.version)
-  for (const required of ['lib/index.js', 'lib/client.js', 'cordis.patch.yml', 'locale/en.json', 'locale/zh.json', 'icon.svg', 'compatibility.json']) {
+  for (const required of ['lib/index.js', 'lib/client.js', 'cordis.patch.yml', 'locale/en.json', 'locale/zh.json', 'icon.svg', 'compatibility.json', 'docs/DETAIL.zh.md', 'docs/preview.zh.svg']) {
     assert.ok(await readFile(join(installed, required)).then(() => true, () => false), `Packed file missing: ${required}`)
   }
   checks.push('packed-payload-present')
+
+  // The three POC skills ship inside the package, so installing the plugin is
+  // what publishes them. Check both the markdown and the script the export
+  // skill tells the model to run: a skill whose script is missing would send
+  // the model looking for a file that is not there.
+  const bundledSkills = ['poc-ledger', 'poc-export', 'poc-submit']
+  for (const name of bundledSkills) {
+    const skillFile = join(installed, 'skills', name, 'SKILL.md')
+    const body = await readFile(skillFile, 'utf8').catch(() => '')
+    assert.ok(body.length > 0, `Packed skill missing or empty: skills/${name}/SKILL.md`)
+    assert.ok(body.startsWith('---'), `skills/${name}/SKILL.md must start with frontmatter`)
+    assert.ok(body.includes(`name: ${name}`), `skills/${name}/SKILL.md must declare name: ${name}`)
+  }
+  assert.ok(
+    await readFile(join(installed, 'skills/poc-export/scripts/export-form.mjs')).then(() => true, () => false),
+    'the export skill script must ship beside its SKILL.md',
+  )
+  report.skills = { bundled: bundledSkills }
+  checks.push('packed-skills-present')
 
   // The cache root must not exist before the first mount: the plugin creates
   // it, which proves the mount is what creates (and owns) the directory.
@@ -237,6 +256,18 @@ try {
   try {
     await delay(1500)
     checks.push('bounded-startup')
+
+    // Runtime proof that the bundled skills were actually PUBLISHED, not merely
+    // shipped: the registration line is emitted only when the skills service was
+    // present, the file parsed, and the registry accepted the payload.
+    const bootLog = strip(record.text)
+    for (const name of bundledSkills) {
+      assert.ok(
+        bootLog.includes(`[work-dashboard] skill registered: ${name}`),
+        `the boot log must show ${name} registering into the skill catalog; got: ${bootLog.slice(-2000)}`,
+      )
+    }
+    checks.push('bundled-skills-registered')
 
     // 1. Cold cache: the mount wiped it, so list reports "no data" and does not
     //    pull anything on its own.

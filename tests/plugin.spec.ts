@@ -13,19 +13,41 @@ import { RepoError } from '../src/repo.js'
  * test; here the cache is driven through a real temporary directory.
  */
 
-/** A minimal Cordis context double that records what the plugin registers. */
+/**
+ * A minimal Cordis context double that records what the plugin registers.
+ *
+ * `inject` mirrors the real contract closely enough for the skill registration:
+ * the callback runs only when the named service is present. A test can omit
+ * `skills` and the plugin must still mount — that is a supported profile.
+ */
 function contextWith(services: Record<string, unknown>) {
   const effects: string[] = []
+  const warnings: string[] = []
   const ctx = {
-    logger: { error: () => {} },
+    logger: {
+      error: () => {},
+      info: () => {},
+      warn: (message: string) => { warnings.push(message) },
+    },
     get: (key: string) => services[key],
+    inject: (names: string[], callback: (scoped: unknown) => void) => {
+      if (names.some((name) => services[name] === undefined)) return
+      callback({
+        get: (key: string) => services[key],
+        effect: (inner: () => unknown, label?: string) => {
+          effects.push(label ?? '')
+          const dispose = inner()
+          return typeof dispose === 'function' ? dispose : () => {}
+        },
+      })
+    },
     effect: (callback: () => unknown, label?: string) => {
       effects.push(label ?? '')
       const dispose = callback()
       return typeof dispose === 'function' ? dispose : () => {}
     },
   }
-  return { ctx, effects }
+  return { ctx, effects, warnings }
 }
 
 /** A unique cache root per test, so parallel files cannot collide. */

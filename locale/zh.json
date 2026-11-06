@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "工作看板",
-    "description": "侧栏里的运营看板：组合面板看钱和风险分布，卡片/看板/表格三种读法，进展流详情与 12 条缺口规则。",
+    "description": "侧栏运营看板 + 三个随包安装的 POC 技能：读台账、导出收集表单、把组员数据提交成 Draft PR。",
     "detail": "docs/DETAIL.zh.md"
   }
 }

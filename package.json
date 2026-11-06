@@ -1,6 +1,6 @@
 {
   "name": "@skillre/dsh-plugin-work-dashboard",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "工作看板：多模块运营看板，POC 运营为首个模块（四维结果、阶段轨道、缺口清单、风险看板、时间线、导出表单）",
   "icon": "./icon.svg",
   "type": "module",
@@ -29,6 +29,7 @@
   },
   "files": [
     "lib/",
+    "skills/",
     "cordis.patch.yml",
     "compatibility.json",
     "docs",

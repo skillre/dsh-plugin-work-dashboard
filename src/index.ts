@@ -21,6 +21,7 @@ import { PocStore } from './store.js'
 import { RepoCache, RepoError, assertSafeCacheRoot } from './repo.js'
 import { buildRiskBoard } from './risks.js'
 import { buildGlobalTimeline } from './timeline.js'
+import { registerBundledSkills } from './skill.js'
 import { createExecuteRoute } from './transport.js'
 import type { ConsoleActions, HostConnection } from './transport.js'
 import type { GlobalTimeline, PocRecord, RiskBoard } from './types.js'
@@ -117,6 +118,12 @@ export function apply(ctx: Context, rawConfig: Partial<WorkDashboardConfig> = {}
   if (!connection?.fetch?.register) throw new Error('work dashboard requires the current DSH Connection exact Fetch-route registry.')
 
   const runtime = createRuntime(config)
+
+  // The three POC skills ship inside this package, so installing the dashboard
+  // is what publishes them and uninstalling is what removes them. Registration
+  // is optional-service and best-effort: a profile without a skill registry
+  // still gets the board (see src/skill.ts).
+  registerBundledSkills(ctx)
 
   // The wipe runs once, on mount. It is not awaited here — a filesystem failure
   // must not abort the Fiber — but it is logged once and then surfaces on the

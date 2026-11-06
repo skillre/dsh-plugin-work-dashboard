@@ -20,6 +20,34 @@ Work Dashboard (plugin)
     └── Global timeline  grouped by month + a monthly distribution + the silent projects
 ```
 
+## Three bundled skills
+
+Installing this plugin also installs three POC skills. They are not separate
+install items and they do not version separately:
+
+| Skill | What it does | Triggered by |
+|---|---|---|
+| `poc-ledger` | Reads and analyses the v3 ledger: progress, stage, the twelve gap rules | "how is POC X doing", "which projects are stuck" |
+| `poc-export` | Generates a self-contained HTML form for colleagues without a GitHub account | "export a form", "have someone fill in this project's progress" |
+| `poc-submit` | Validates the colleague's `.json`, merges it into the v3 YAML, opens a Draft PR | "submit this file", "open a PR for me" |
+
+**Why bundle them**: these skills describe the same fields the dashboard reads. They
+used to be installed separately into the user's skill directory, and when the data
+model moved from v1 to v3 the skills kept teaching the model `why_customer_test` /
+`result` / `timeline` — fields that no longer exist. Shipping them in one package on
+one version makes that drift impossible.
+
+- Skill files live at `skills/<name>/SKILL.md`; the export skill also ships an
+  executable `skills/poc-export/scripts/export-form.mjs`.
+- Registration goes through DSH's `skills` service (`ctx.skills.register`,
+  `source: 'bundled'`) and is bound to the plugin's own Fiber, so uninstalling
+  removes it.
+- `skills` is an **optional** service: a profile without a skill registry still
+  gets the dashboard, just without the skills (a warning is logged).
+- All three were rewritten: v3 field model, 8 gap rules → 12, and the export script
+  replaced the dead external `poc_form.py` with a bundled `export-form.mjs` (verified
+  in a real browser: autosave, live gap counts, focus preservation, draft persistence).
+
 ## What the module solves
 
 A POC ledger rots at "it feels like it worked": the project says the goal was met but there is no evidence; the evidence exists but the customer never confirmed it in writing; it genuinely worked and nothing followed. Written into one `result` field, those three collapse into "going well", and nobody notices that *it worked but nothing was banked* is the most valuable gap of all.

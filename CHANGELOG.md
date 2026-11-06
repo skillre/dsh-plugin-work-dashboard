@@ -1,5 +1,60 @@
 # Changelog
 
+## 0.5.0
+
+### Minor Changes
+
+- Ship the three POC skills inside the plugin package and rewrite them for v3.
+  
+  The `poc-ledger`, `poc-export` and `poc-submit` skills were built before the
+  dashboard and installed separately into the user's skill directory. The ledger
+  then moved from v1 to v3, and the skills kept teaching the model fields that no
+  longer exist: `why_customer_test`, `result`, `timeline`, `gates.G0..G4`,
+  `success_criteria`. They also pointed at `~/dsh-test/poc_form.py`, a v1 generator
+  whose output the current ledger cannot read. This release fixes all of that and
+  removes the drift permanently by shipping them in the same package.
+  
+  **Bundled, not separately installed**
+  
+  - `skills/poc-ledger`, `skills/poc-export`, `skills/poc-submit` ship in the
+    tarball (`package.json#files`), so installing the plugin publishes them and
+    uninstalling removes them. They can no longer be a different version from the
+    data model they describe.
+  - `src/skill.ts` registers all three through DSH's `skills` service
+    (`ctx.skills.register`, `source: 'bundled'`), binding each disposer to the
+    plugin's own Fiber. `skills` is an optional service resolved with `ctx.inject`,
+    never a static dependency: a profile without a skill registry still mounts the
+    dashboard, and each skill is registered inside its own try/catch so one bad
+    file cannot take the others down.
+  
+  **What was wrong, and what it says now**
+  
+  - `poc-ledger`: rewritten for the v3 shape (identity / gate0 / plan / progress[] /
+    outcome), the twelve gap rules instead of eight, the four dimensions read from
+    `outcome` with derived-vs-manual tagging, and the three rule caveats that keep
+    the rules from over-firing (R4–R6 skip empty lists, R8–R10 read only the newest
+    entry, R12 does not fire without `stage_since`).
+  - `poc-export`: now runs the bundled `scripts/export-form.mjs` instead of the
+    dead external Python generator. The new script is a real v3 form: identity /
+    G0 / plan / one appended progress entry / outcome, with autosave keyed by
+    project id (the old generator keyed on generation time, so drafts were
+    unreachable), live gap counting, focus preservation while typing, and JSON
+    output that `poc-submit` can consume.
+  - `poc-submit`: rewritten to merge into v3 YAML — append to `progress[]` with the
+    next `seq` and keep every untouched field — instead of copying a whole v1
+    `result` block.
+  
+  **Verification**
+  
+  - 17 new unit tests over the parser and the registration path, including content
+    assertions: the ledger skill must not present removed v1 fields as schema, must
+    list all twelve rules, and the export skill must point at the bundled script.
+  - The isolated-profile integration run now asserts that all three skills are
+    present in the installed package AND that each one actually reached the skill
+    catalog at boot (`bundled-skills-registered`, 31 checks total).
+  - The generated form was driven in a real browser: gap counters update live,
+    focus survives typing, and the draft persists across reloads.
+
 ## 0.4.0
 
 ### Minor Changes
