@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "fleetOwner": "skillre",
   "slug": "work-dashboard",
-  "templateVersion": "0.7.0",
-  "templateDigest": "sha256:ff567924d9f3c06ed3d606f79752f52bc906449cd01dbe99e726d37d47b3e0df",
-  "policyVersion": "0.7.1",
-  "policyDigest": "sha256:fd178c90bbc0fe463c403c21354165fdf8df28d0cca6767be71630b90ace4c40",
+  "templateVersion": "0.11.0",
+  "templateDigest": "sha256:2ec58c8e087ed221351529f5ad8acf39c01bfb58d30aa135e6fbd604868af65e",
+  "policyVersion": "0.16.0",
+  "policyDigest": "sha256:87da88c54b7111493ffef1b1dde04b18b932dc2545de80c38d468a6a572c985a",
   "createdAt": "2026-11-05",
   "createdWithDsh": "0.2.2-rc.1"
 }

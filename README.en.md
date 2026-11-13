@@ -1,6 +1,6 @@
 # @skillre/dsh-plugin-work-dashboard
 
-> Status: experimental · targets DSH `0.2.2-rc.1`
+> Status: experimental · targets DSH `0.2.2-rc.2`
 
 Adds a **Work Dashboard** entry to the DSH left sidebar: a **multi-module** operations board that puts everything in flight in one place, so you can see what is moving before deciding what to fix. Only the first module, **POC Operations**, is implemented today.
 
@@ -220,7 +220,8 @@ See [UNINSTALL.md](UNINSTALL.md). All data lives in the GitHub repository, so un
 
 | DSH version | Result | Verified | Notes |
 |---|---|---|---|
-| 0.2.2-rc.1 | passed | 2026-11-06 | packed install + bounded startup + real clone + 29 isolated checks + 69 browser assertions (see `compatibility.json`) |
+| 0.2.2-rc.2 | passed | 2026-11-13 | packed install + bounded startup + real clone + 31 isolated checks (incl. the three skills really reaching the skill catalog) (see `compatibility.json`) |
+| 0.2.2-rc.1 | passed | 2026-11-06 | same behaviour + 69 browser assertions; 0.6.0 does not touch the client bundle, so that record still holds |
 
 Machine-readable evidence is in `compatibility.json`; screenshots and reports are in `docs/evidence/`. **Desktop Client (Electron) was not verified**: its profile is managed by the app and this CLI harness cannot drive it, so a Desktop-specific visual check is still outstanding before Desktop delivery.
 

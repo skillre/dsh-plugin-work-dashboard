@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- Align the repository with fleet template 0.11.0 / policy 0.16.0, and fix two real
+  test defects that kept CI red on `main`.
+  
+  **Display contract: migrated to the shared implementation**
+  
+  `scripts/preview.mjs` and `scripts/prepare-release.mjs` now import
+  `scripts/display-contract.mjs` instead of each carrying their own copy of the rules.
+  The local copy had drifted from npm on the one case that matters: `files` is not an
+  allow/deny list, so a directory entry (`docs`) contributes ignores while a file entry
+  becomes a strict inclusion. The old code re-implemented that model and got it
+  backwards, which is why the published 0.5.0 tarball shipped `docs/PREVIEW.md` — the
+  internal whiteboard registry with its Feishu document links and tokens — even though
+  `files` intended to exclude it. Release gating now runs against a real `npm pack`
+  file list, so the repository check, `prepare-release` and the fleet audit cannot
+  disagree, and they cannot disagree with npm either.
+  
+  `package.json#files` gains the explicit `"!docs/PREVIEW.md"` exclusion. Verified by
+  packing: the file is present at the previous commit and absent now.
+  
+  **CI: two genuine failures, both on `main` today**
+  
+  - `tests/plugin.spec.ts` built its temporary cache roots as `${TMPDIR}/name-stamp`.
+    Runners export `TMPDIR=/tmp`, which is only two path segments deep, and the plugin
+    refuses a cache root shallower than three — it wipes that path at mount, so a
+    shallow root could delete `/tmp` itself. The guard was right; the test fixture was
+    wrong. It now nests under a fixed sub-directory, so the depth floor holds on every
+    platform.
+  
+  - `tests/view.spec.tsx` failed every one of its 41 assertions on Node 26. Node 26
+    defines its own experimental `globalThis.localStorage`, and vitest's jsdom
+    environment only copies a window property onto the global when that name is not
+    already present — so the runtime stub shadowed the real Storage, `browserStorage()`
+    correctly reported "unavailable", and the persistence assertions could not pass.
+    The suite now installs jsdom's Storage when the global is not usable, and fails
+    loudly if neither is available rather than passing vacuously. Both directions were
+    verified on real Node 26: 41/41 failing before, 41/41 passing after.
+  
+  **Policy alignment**
+  
+  `AGENTS.md` gains the three sections the current template requires and this
+  repository was missing: release authority, update readiness, and the display
+  contract. `package-lock.json` had been left at `0.1.0` since the first commit while
+  `package.json` moved on; it is re-synced.
+
 ## 0.5.0
 
 ### Minor Changes

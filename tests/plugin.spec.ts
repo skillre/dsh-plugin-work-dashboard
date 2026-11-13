@@ -50,9 +50,17 @@ function contextWith(services: Record<string, unknown>) {
   return { ctx, effects, warnings }
 }
 
-/** A unique cache root per test, so parallel files cannot collide. */
+/**
+ * A unique cache root per test, so parallel files cannot collide.
+ *
+ * The cache-root guard refuses paths shallower than three segments (it must
+ * never be able to wipe the home directory or `/tmp` itself), and CI runners
+ * set TMPDIR=/tmp, so the helper always nests under a fixed sub-directory to
+ * stay above the depth floor on every platform.
+ */
 function cacheRoot(suffix: string): string {
-  return `${process.env.TMPDIR ?? '/tmp'}/work-dashboard-unit-${suffix}-${Date.now()}`
+  const base = (process.env.TMPDIR ?? '/tmp').replace(/\/+$/, '')
+  return `${base}/work-dashboard/unit/${suffix}-${Date.now()}`
 }
 
 describe('mount contract', () => {

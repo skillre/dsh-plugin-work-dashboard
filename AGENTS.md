@@ -31,7 +31,7 @@ For Cordis composition or preset work, load `editing-cordis-compositions` when a
 
 - Preserve the package, repository, row, and Cordis plugin names after first public release.
 - Keep the package ESM and its bundle patch at `cordis.patch.yml`.
-- Ensure `package.json#dsh.bundle.patch` points to a file included by `files`; publish only built runtime/declaration files, the patch, `compatibility.json`, the `locale/` dictionaries, the icon, README/uninstall guidance, and license.
+- Ensure `package.json#dsh.bundle.patch` points to a file included by `files`; publish only built runtime/declaration files, the patch, `compatibility.json`, the `locale/` dictionaries, the icon, the detail documents and their preview images, README/uninstall guidance, and license. Exclude `docs/PREVIEW.md`: it records internal whiteboard links and tokens.
 - Declare `engines.dsh` and keep it honest: it is the machine-readable statement of the DSH lines this package was really mounted and tested against. A SemVer range is documentation, not evidence; re-verify on each new DSH line instead of widening the range.
 - Row IDs are fleet-global and start with `skillre-`.
 - Declare only actual dependencies. Keep identity-sensitive Cordis/DSH APIs as peers when required and mirror them in devDependencies.
@@ -41,6 +41,77 @@ For Cordis composition or preset work, load `editing-cordis-compositions` when a
 - Every side effect must belong to the current Fiber and be removed on stop/update.
 - Host↔Client boundaries carry only minimal lossless JSON.
 - Do not add Client structure from memory; query the current Client contract and then add the required build/export manifest deliberately.
+
+## Release authority
+
+This repository is published through the reviewed OIDC workflow (`.github/workflows/release.yml`)
+with npm Trusted Publishing. Never store an npm token, and never run `npm publish` from a local
+checkout.
+
+An agent may **dispatch** that workflow after explicit human authorization:
+
+```sh
+DSH_RELEASE_AUTHORIZATION="@skillre/dsh-plugin-work-dashboard@<version> authorized by <name>" \
+  npm run release:dispatch -- work-dashboard
+```
+
+That command belongs to the fleet root, not to this checkout: the dispatch preflight, the
+repository-settings provisioning and the market rebuild all read `plugins.json`, which lives there.
+Dispatch is not publication: the protected `npm-publish` environment still needs a human reviewer.
+The dispatch preflight refuses unless the worktree is clean, the branch is `main`, HEAD matches
+`origin/main`, the update-readiness audit is clean, and `compatibility.json` carries a real
+`dump-config` + `bounded-startup` record for the mounted DSH line.
+
+## Update readiness is a hard requirement
+
+A user must be able to open the plugin card and get a **Versions** section with one-click in-place
+update. The DSH plugin manager grants that only to a bundle installed from a **registry spec under
+its own name** that declares a valid SemVer version, ships its bundle patch, carries no protected
+management row, and accepts the running DSH line.
+
+Non-negotiable consequences for this repository:
+
+- **Publish to npm.** `github:`, `git+`, `file:`, absolute paths and tarballs are never updatable in
+  place. The registry is the delivery channel, not an option.
+- Keep `publishConfig.access: "public"` and never set `private: true`; npm refuses those publishes.
+- Never declare a protected management row in `cordis.patch.yml`
+  (`@deepseek-ai/dsh-plugin-manager`, `@deepseek-ai/dsh-plugin-manager/tools`,
+  `@deepseek-ai/cordis-plugin-loader`, `@deepseek-ai/cordis-plugin-include`,
+  `@deepseek-ai/dsh-api-gateway`, `@deepseek-ai/dsh-host-webserver`, `@deepseek-ai/dsh-client-modules`,
+  and the plugin-inventory / typert / remotes rows). A bundle that ships one becomes unremovable and
+  loses its update path. Consuming the `pluginManager` service is fine; publishing those rows is not.
+- Keep `engines.dsh` honest and wide enough for the DSH line you actually mount. An update target is
+  refused with `incompatible-version` when its own `engines.dsh` or DSH peers reject the runtime.
+  DSH judges this with `includePrerelease`, so `>=0.2.0-rc.2 <0.3.0` does accept `0.2.2-rc.1`.
+- Do not add `scripts.prepare`; it only exists for raw Git installs, which are not updatable.
+
+`npm run check` enforces the repository-side half through the fleet audit; the remaining half is a
+user action (installing from the npm package spec instead of a Git URL).
+
+## Display contract
+
+The plugin detail page is a **picture**, not the README. Keep the three layers separate:
+
+- `locale/en.json` and `locale/zh.json` carry `meta.title`, a one-sentence `meta.description`
+  (<= 120 characters, plain text) and `meta.detail`;
+- `docs/DETAIL.md` / `docs/DETAIL.zh.md` hold exactly one `![alt](preview*.svg)` line and nothing else;
+- `README.md` / `README.en.md` keep the install, configuration, compatibility and limitation detail.
+
+`docs/preview.svg` / `docs/preview.zh.svg` are the authored artifacts; a **Feishu whiteboard** is an
+optional editing source, recorded in `docs/PREVIEW.md` (which `files` excludes with
+`!docs/PREVIEW.md` because it holds internal links and tokens).
+
+Every rule lives in `scripts/display-contract.mjs` and nowhere else. `npm run check` runs
+`node scripts/preview.mjs check` over it; `scripts/prepare-release.mjs` runs the same module against
+the **packed file list**, so a document that `meta.detail` names but `files` omits fails the release
+instead of rendering an error page. The fleet audit imports that same file, so repository and fleet
+verdicts cannot diverge.
+
+Never replace the picture with prose, and never let `meta.detail` fall back to the README by leaving
+it unset. The 640x300 banner ratio, the 500 KiB budget and the Feishu element set are fleet
+conventions; the silent-failure traps (`exports["./locale/*.json"]`, a `meta.detail` naming an
+unpublished file, an icon outside `files`) are DSH behaviour. See the fleet's
+`docs/display-contract.md` for which is which.
 
 ## Development workflow
 

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { WorkDashboardPage } from '../src/client/shell.jsx'
 import type { ClientApi } from '../src/client/api.js'
@@ -15,6 +15,44 @@ import type { PocRecord, PortfolioAnalysis, ProgressView, ProjectDetail, Project
  * cells, the G0→G4 rail, the pending ordering, the detail page, the settings
  * persistence, and the timer cadence (including that it stops on unmount).
  */
+
+/**
+ * Make sure this file really has a working `localStorage`.
+ *
+ * Node 26 defines its own experimental `globalThis.localStorage`, and vitest's
+ * jsdom environment only copies a window property onto the global object when
+ * that name is *not* already present there. So on Node 26 the real Storage
+ * object never arrives: the runtime's stub (which is unusable without
+ * `--localstorage-file`) shadows it, `browserStorage()` correctly reports
+ * "unavailable", and every assertion in this file fails — while the identical
+ * code passes on Node 22 and 24. The `jsdom` instance vitest exposes owns a
+ * real Storage, so install that one whenever the global is not usable, which
+ * keeps this suite meaningful on every supported Node line instead of skipping
+ * the storage assertions on the newest one.
+ */
+beforeAll(() => {
+  const usable = (candidate: unknown): boolean => {
+    try {
+      const storage = candidate as Storage
+      storage.setItem('__storage-probe__', '1')
+      const roundTripped = storage.getItem('__storage-probe__') === '1'
+      storage.removeItem('__storage-probe__')
+      return roundTripped
+    } catch {
+      return false
+    }
+  }
+
+  if (usable(globalThis.localStorage)) return
+  const storage = (globalThis as { jsdom?: { window: Window } }).jsdom?.window.localStorage
+  if (storage === undefined) {
+    throw new Error(
+      'This suite needs a working localStorage: neither the global nor the jsdom window provides one, ' +
+        'so the cadence-persistence assertions cannot be verified.',
+    )
+  }
+  Object.defineProperty(globalThis, 'localStorage', { value: storage, configurable: true, writable: true })
+})
 
 afterEach(() => {
   cleanup()

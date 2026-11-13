@@ -2,6 +2,24 @@
 
 Publishing, tags, releases, Trusted Publisher changes and remote writes require direct human authorization.
 
+## Current status: never published
+
+The package does not exist on the registry. Verified 2026-11-13: `https://registry.npmjs.org/@skillre%2Fdsh-plugin-work-dashboard`
+returns 404, as does every version document. Two consequences, both of which have already bitten this repository:
+
+- **No in-place updates, and not listed in the market.** The fleet market builder emits npm-sourced entries
+  only, so a package with no published version is silently skipped. The hosted index stopped listing 工作看板
+  when the entries were rebuilt, and the previously pinned Git entry is gone with it. Nothing is wrong with the
+  repository; there is simply nothing installable to advertise.
+- **The first publish cannot be automated.** npm cannot attach a Trusted Publisher to a package that does not
+  exist, so bootstrap necessarily stops at one human `npm publish`. Everything around it is already done:
+  the protected `npm-publish` environment with its reviewer, `NPM_TRUSTED_PUBLISHING_READY=true`, and the
+  `workflow_dispatch` release workflow are provisioned and verified.
+
+Before any dispatch, `npm whoami` must answer. As of 2026-11-13 it returns 401, so the local session is dead
+and `npm run release:bootstrap -- work-dashboard` (fleet root) reports `the npm session is missing or
+expired`. Run `npm login --auth-type=web` first; the login itself needs the interactive browser prompt.
+
 ## Bootstrap once
 
 1. Enable **Settings → Actions → General → Allow GitHub Actions to create and approve pull requests**.

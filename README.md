@@ -1,6 +1,6 @@
 # @skillre/dsh-plugin-work-dashboard · 工作看板
 
-> 状态：experimental · 面向 DSH `0.2.2-rc.1`
+> 状态：experimental · 面向 DSH `0.2.2-rc.2`
 
 在 DSH 左侧栏加一个「工作看板」入口：一个**多模块**运营看板，把正在推进的事情放到一个地方看清楚，再决定下一步补什么。目前只有第一个模块 **POC 运营**。
 
@@ -314,7 +314,8 @@ node scripts/verify-market-install.mjs  # 线上索引 → 真实安装 → 动�
 
 | DSH 版本 | 结果 | 验证日期 | 说明 |
 |---|---|---|---|
-| 0.2.2-rc.1 | 通过 | 2026-11-06 | 打包安装 + 有界启动 + 真实 clone + 29 项隔离集成 + 69 项浏览器断言（见 `compatibility.json`） |
+| 0.2.2-rc.2 | 通过 | 2026-11-13 | 打包安装 + 有界启动 + 真实 clone + 31 项隔离集成（含三个技能确实进入技能目录）（见 `compatibility.json`） |
+| 0.2.2-rc.1 | 通过 | 2026-11-06 | 同上行为 + 69 项浏览器断言；0.6.0 未改动客户端产物，该记录仍然有效 |
 
 机器可读证据在 `compatibility.json`，截图与报告在 `docs/evidence/`。**未验证 Desktop Client（Electron）**：它的 profile 由应用管理，本 CLI 测试台无法驱动，Desktop 发布前需在那里重做一次视觉检查。
 
