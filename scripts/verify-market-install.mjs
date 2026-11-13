@@ -106,11 +106,19 @@ try {
   const entry = index.plugins.find((p) => p.name === manifest.name)
   assert.ok(entry, `${manifest.name} is not in the live index`)
   const version = entry.versions[0]
-  const spec = `git+${version.source.url}#${version.source.commit}`
+  // The index may point at the registry or at a pinned Git commit. Only the npm
+  // source is updatable in place, so the shape matters and is recorded rather
+  // than assumed: deriving a git+ spec from an npm entry (or the reverse) would
+  // install something the user never sees in Discover.
+  const source = version.source
+  assert.ok(source?.type === 'npm' || source?.type === 'git', `unsupported market source: ${source?.type}`)
+  const spec = source.type === 'npm'
+    ? `${entry.name}@${version.version}`
+    : `git+${source.url}#${source.commit}`
   report.spec = spec
-  report.entry = { version: version.version, commit: version.source.commit, engines: version.engines }
+  report.entry = { version: version.version, source: source.type, commit: source.commit, engines: version.engines }
   checks.push('live-index-has-entry')
-  checks.push('live-index-pins-commit')
+  checks.push(source.type === 'npm' ? 'live-index-uses-registry' : 'live-index-pins-commit')
 
   // 2. Install that spec into an owned, disposable profile.
   await run(['--profile', profile, '--from-default-profile', 'web', '--dump-config'])
@@ -133,7 +141,7 @@ try {
     '    defaultBranch: main',
     '    cloneTimeoutMs: 60000',
     '    fetchTimeoutMs: 40000',
-    '    staleDays: 30',
+    '    stallDays: 45',
     '',
   ].join('\n'), 'utf8')
 

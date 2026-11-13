@@ -91,7 +91,7 @@ try {
     '    defaultBranch: main',
     '    cloneTimeoutMs: 60000',
     '    fetchTimeoutMs: 40000',
-    '    staleDays: 30',
+    '    stallDays: 45',
     '',
   ].join('\n'), 'utf8')
   await run(['plugin', '--profile', profile, 'add', tarball, '--ignore-scripts', '--store-dir', join(owned, 'pnpm-store')])

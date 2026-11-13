@@ -314,7 +314,7 @@ node scripts/verify-market-install.mjs  # 线上索引 → 真实安装 → 动�
 
 | DSH 版本 | 结果 | 验证日期 | 说明 |
 |---|---|---|---|
-| 0.2.2-rc.2 | 通过 | 2026-11-13 | 打包安装 + 有界启动 + 真实 clone + 31 项隔离集成（含三个技能确实进入技能目录）（见 `compatibility.json`） |
+| 0.2.2-rc.2 | 通过 | 2026-11-13 | 打包安装 + 有界启动 + 真实 clone + 31 项隔离集成（含三个技能确实进入技能目录）+ 15 项线上市场 npm 安装（见 `compatibility.json`） |
 | 0.2.2-rc.1 | 通过 | 2026-11-06 | 同上行为 + 69 项浏览器断言；0.6.0 未改动客户端产物，该记录仍然有效 |
 
 机器可读证据在 `compatibility.json`，截图与报告在 `docs/evidence/`。**未验证 Desktop Client（Electron）**：它的 profile 由应用管理，本 CLI 测试台无法驱动，Desktop 发布前需在那里重做一次视觉检查。

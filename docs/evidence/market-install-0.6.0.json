@@ -1,0 +1,37 @@
+{
+  "profile": "poc-market-jpugyI",
+  "indexUrl": "https://skillre.github.io/dsh-plugin-market/index.json",
+  "spec": "@skillre/dsh-plugin-work-dashboard@0.6.0",
+  "checks": [
+    "live-index-has-entry",
+    "live-index-uses-registry",
+    "dsh --profile poc-market-jpugyI --from-default-profile",
+    "profile-created",
+    "dsh plugin --profile poc-market-jpugyI",
+    "market-spec-installed",
+    "dependency-and-selection",
+    "dsh --profile poc-market-jpugyI --patch",
+    "dump-config",
+    "packed-payload-present",
+    "bounded-startup",
+    "api-list",
+    "api-detail",
+    "api-risks",
+    "api-timeline"
+  ],
+  "cleanup": {
+    "ownedRoot": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-poc-market-install-jpugyI",
+    "processesStopped": true,
+    "rootRemoved": true,
+    "verified": true
+  },
+  "entry": {
+    "version": "0.6.0",
+    "source": "npm",
+    "engines": {
+      "dsh": ">=0.2.2-rc.1 <0.3.0"
+    }
+  },
+  "verifiedOn": "2026-11-13",
+  "dsh": "0.2.2-rc.2"
+}

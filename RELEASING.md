@@ -1,26 +1,31 @@
-# Releasing @skillre/dsh-plugin-work-dashboard
+## Current status: published, Trusted Publisher outstanding
 
-Publishing, tags, releases, Trusted Publisher changes and remote writes require direct human authorization.
+`@skillre/dsh-plugin-work-dashboard@0.6.0` was published to the registry on 2026-11-13
+(`dist-tag latest`). That was the first publish and it was done by hand, because npm cannot attach a
+Trusted Publisher to a package that does not exist — the one step of this pipeline that a human must
+perform. The artifact was verified against the locally packed and mounted tarball before publishing,
+and the published tarball was re-downloaded afterwards to confirm it ships the same 62 files and no
+`docs/PREVIEW.md`.
 
-## Current status: never published
+Until now the package was not on the registry at all, and that had two visible consequences: the
+plugin could not be updated in place, and the fleet market builder — which emits npm-sourced entries
+only — silently skipped it, so it disappeared from Discover when the index was rebuilt. Both are
+resolved by the publish: `npm run update:readiness -- work-dashboard` reports OK, and the market entry
+is now npm-sourced.
 
-The package does not exist on the registry. Verified 2026-11-13: `https://registry.npmjs.org/@skillre%2Fdsh-plugin-work-dashboard`
-returns 404, as does every version document. Two consequences, both of which have already bitten this repository:
+**Still outstanding: the Trusted Publisher.** The workflow cannot publish the next version until this
+relationship exists. npm gates it behind one interactive 2FA confirmation:
 
-- **No in-place updates, and not listed in the market.** The fleet market builder emits npm-sourced entries
-  only, so a package with no published version is silently skipped. The hosted index stopped listing 工作看板
-  when the entries were rebuilt, and the previously pinned Git entry is gone with it. Nothing is wrong with the
-  repository; there is simply nothing installable to advertise.
-- **The first publish cannot be automated.** npm cannot attach a Trusted Publisher to a package that does not
-  exist, so bootstrap necessarily stops at one human `npm publish`. Everything around it is already done:
-  the protected `npm-publish` environment with its reviewer, `NPM_TRUSTED_PUBLISHING_READY=true`, and the
-  `workflow_dispatch` release workflow are provisioned and verified.
+```sh
+cd /Users/skillre/dsh-plugins
+npm run release:auth -- work-dashboard --action trust
+```
 
-Before any dispatch, `npm whoami` must answer. As of 2026-11-13 it returns 401, so the local session is dead
-and `npm run release:bootstrap -- work-dashboard` (fleet root) reports `the npm session is missing or
-expired`. Run `npm login --auth-type=web` first; the login itself needs the interactive browser prompt.
+`--allow-publish` is required; npm rejects the command without one of the permission flags. As of
+2026-11-13 the confirmation was not completed, so `npm trust list` has not been run and no OIDC
+publish has happened yet.
 
-## Bootstrap once
+## Bootstrap once (historical — already done)
 
 1. Enable **Settings → Actions → General → Allow GitHub Actions to create and approve pull requests**.
 2. Review branch protection: a PR created with the default `GITHUB_TOKEN` does not trigger a new `pull_request` workflow. Manually dispatch checks, prepare the version PR as a human, or use a reviewed GitHub App when a required status would otherwise be absent. Do not silently add a long-lived PAT.
