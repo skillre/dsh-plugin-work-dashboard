@@ -45,6 +45,12 @@ const SNAPSHOT: Snapshot = {
     withProgress: 0,
     lastActivity: null,
   },
+  blockers: {
+    rows: [],
+    counts: { gap: 0, stalled: 0, 'missing-amount': 0, 'no-progress': 0, 'no-stage-since': 0 },
+    projectsBlocked: 0,
+    projectsTotal: 0,
+  },
   warnings: [],
 }
 
@@ -69,6 +75,7 @@ function actions(overrides: Partial<ConsoleActions> = {}): () => Promise<Console
     async detail(pocId: string) { return pocId === 'POC-2026-001' ? DETAIL : null },
     async risks() { return { rows: [], counts: { high: 0, medium: 0, low: 0, unset: 0, total: 0 }, projectsWithRisks: 0, projectsTotal: 0 } },
     async timeline() { return { entries: [], range: null, months: [], silentProjects: [] } },
+    async exportForm() { return { html: '<html></html>', fileName: 'form.html', projectCount: 0 } },
     ...overrides,
   })
 }
@@ -117,6 +124,31 @@ describe('the exact route', () => {
     expect((body.result as { ok: boolean }).ok).toBe(false)
     expect((body.result as { error: { code: string } }).error.code).toBe('work-dashboard/unknown-project')
     expect(body.rpcId).toBe('rpc-2')
+  })
+
+  it('answers export-form with the generated document', async () => {
+    // The generator lives on the Host because it needs the YAML serializer;
+    // the route only has to forward the mode and the ids.
+    const seen: Array<{ mode: string; pocIds: readonly string[] }> = []
+    const route = createExecuteRoute(actions({
+      async exportForm(mode, pocIds) {
+        seen.push({ mode, pocIds })
+        return { html: '<html></html>', fileName: `${mode}.html`, projectCount: pocIds.length }
+      },
+    }))
+    const response = await route.fetch(request({ action: 'export-form', mode: 'fill', pocIds: ['POC-2026-001'] }))
+    const body = await envelopeOf(response)
+    expect((body.result as { ok: boolean }).ok).toBe(true)
+    expect((body.result as { value: { fileName: string } }).value.fileName).toBe('fill.html')
+    expect(seen).toEqual([{ mode: 'fill', pocIds: ['POC-2026-001'] }])
+  })
+
+  it('rejects an export-form request with an unknown mode', async () => {
+    const route = createExecuteRoute(actions())
+    const response = await route.fetch(request({ action: 'export-form', mode: 'nonsense', pocIds: [] }))
+    const body = await envelopeOf(response)
+    expect((body.result as { ok: boolean }).ok).toBe(false)
+    expect((body.result as { error: { code: string } }).error.code).toBe('work-dashboard/bad-request')
   })
 })
 

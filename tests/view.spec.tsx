@@ -110,6 +110,7 @@ function summary(overrides: Partial<ProjectSummary> = {}): ProjectSummary {
     daysSinceProgress: 22,
     outcomeAchievement: '部分达成',
     outcomeRecognition: '部分认可',
+    lastRecognition: '部分认可',
     ...overrides,
   }
 }
@@ -201,6 +202,32 @@ function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
         params: { count: 5, missing: 'why_customer,why_us,decision_chain,post_poc_decision,tech_owner' },
       },
     ],
+    // The blocker board merges the gap rules with the four completeness
+    // sources. Only POC-2026-002 has no progress, and no project is stalled (the
+    // fixture has no stage_since), so the counts describe exactly that.
+    blockers: {
+      rows: [
+        {
+          source: 'gap', level: 'high', priority: 96, pocId: 'POC-2026-003',
+          pocName: '某某制造产线安全接入', stageLabel: 'G4-结果转化',
+          rule: 'R11-no-next-milestone', ruleNo: 11, params: {},
+        },
+        {
+          source: 'gap', level: 'high', priority: 90, pocId: 'POC-2026-002',
+          pocName: '某某集团办公网改造', stageLabel: 'G0-立项',
+          rule: 'R1-gate0-missing', ruleNo: 1,
+          params: { count: 5, missing: 'why_customer,why_us,decision_chain,post_poc_decision,tech_owner' },
+        },
+        {
+          source: 'no-progress', level: 'high', priority: 86, pocId: 'POC-2026-002',
+          pocName: '某某集团办公网改造', stageLabel: 'G0-立项',
+          rule: null, ruleNo: 0, params: {},
+        },
+      ],
+      counts: { gap: 2, stalled: 0, 'missing-amount': 0, 'no-progress': 1, 'no-stage-since': 0 },
+      projectsBlocked: 2,
+      projectsTotal: 3,
+    },
     warnings: [],
     ...overrides,
   }
@@ -299,9 +326,10 @@ function makeApi(options: {
   refreshed?: Snapshot
   detailRecord?: ProjectDetail
   failRefresh?: string
-} = {}): ClientApi & { refreshCalls: number } {
+} = {}): ClientApi & { refreshCalls: number; lastExport?: { mode: string; pocIds: string[] } } {
   const api = {
     refreshCalls: 0,
+    lastExport: undefined as { mode: string; pocIds: string[] } | undefined,
     async list() {
       return options.initial ?? snapshot()
     },
@@ -355,8 +383,18 @@ function makeApi(options: {
         silentProjects: [{ pocId: 'POC-2026-002', pocName: '某某集团办公网改造' }],
       }
     },
+    async exportForm(mode: string, pocIds: readonly string[]) {
+      // The dialog decides fill-vs-blank from the selection, so the test only
+      // needs to observe what the Host was asked for.
+      api.lastExport = { mode, pocIds: [...pocIds] }
+      return {
+        html: '<!DOCTYPE html><html><body>form</body></html>',
+        fileName: mode === 'blank' ? 'blank.html' : `form-${pocIds.length}.html`,
+        projectCount: pocIds.length,
+      }
+    },
   }
-  return api as unknown as ClientApi & { refreshCalls: number }
+  return api as unknown as ClientApi & { refreshCalls: number; lastExport?: { mode: string; pocIds: string[] } }
 }
 
 /** Render the page and wait for the initial load to settle. */
@@ -409,6 +447,73 @@ describe('overview page', () => {
     expect(screen.getAllByText('体系 / 公司').length).toBeGreaterThan(0)
     expect(screen.getAllByText('金额集中度').length).toBeGreaterThan(0)
     expect(screen.getAllByText('四维覆盖').length).toBeGreaterThan(0)
+  })
+
+  it('puts the five portfolio figures in a KPI strip above everything', async () => {
+    await renderPage(makeApi())
+    const strip = document.querySelector('.kpi-strip')
+    expect(strip).toBeTruthy()
+    const cells = [...document.querySelectorAll('.kpi-cell')]
+    expect(cells.length).toBe(5)
+    // The strip states the counters the stats block carries, and the blocked
+    // count comes from the blocker board — not from a second computation.
+    const text = strip?.textContent ?? ''
+    expect(text).toContain('项目总数')
+    expect(text).toContain('进行中')
+    expect(text).toContain('预算合计')
+    expect(text).toContain('有阻障')
+    expect(text).toContain('2,600')
+  })
+
+  it('offers one chip per stage, with its count, and filters on click', async () => {
+    await renderPage(makeApi())
+    const chips = [...document.querySelectorAll('.kpi-stage-chip')]
+    // G0..G4 plus closed/unknown that hold projects; zero buckets may also show.
+    expect(chips.length).toBeGreaterThanOrEqual(5)
+    const g0 = chips.find((chip) => chip.textContent?.startsWith('G0')) as HTMLElement
+    fireEvent.click(g0)
+    // The chip becomes active and the list narrows.
+    expect(g0.getAttribute('data-active')).toBe('true')
+    // The result count appears in both the toolbar and the footer, by design.
+    expect(screen.getAllByText(/筛出 1 \/ 3 个项目/).length).toBeGreaterThan(0)
+    fireEvent.click(g0)
+    expect(screen.getAllByText(/筛出 3 \/ 3 个项目/).length).toBeGreaterThan(0)
+  })
+
+  it('splits the budget into approved, pending and unset with a stated total', async () => {
+    await renderPage(makeApi())
+    const panel = document.querySelector('.budget-panel') as HTMLElement
+    expect(panel).toBeTruthy()
+    expect(panel.textContent).toContain('预算合计')
+    // Three buckets, each with its own count and amount.
+    const rows = [...panel.querySelectorAll('.budget-row')]
+    expect(rows.length).toBe(3)
+    expect(rows[0]?.textContent).toContain('G0 已通过')
+    expect(rows[1]?.textContent).toContain('待评审')
+    expect(rows[2]?.textContent).toContain('未填金额')
+  })
+
+  it('warns when a missing amount makes the budget total understate reality', async () => {
+    // A project with no amount: the total cannot include it, so the panel has to
+    // say so rather than present the figure as complete.
+    const initial = snapshot()
+    initial.projects = initial.projects.map((project) =>
+      project.pocId === 'POC-2026-002' ? { ...project, amountWan: 0 } : project)
+    await renderPage(makeApi({ initial }))
+    const panel = document.querySelector('.budget-panel') as HTMLElement
+    expect(panel.querySelector('.budget-warning')).toBeTruthy()
+    expect(panel.textContent).toContain('1 个项目没有金额')
+  })
+
+  it('shows in-stage completion, so a one-column funnel still says something', async () => {
+    await renderPage(makeApi())
+    const figure = document.querySelector('.stage-progress') as HTMLElement
+    expect(figure).toBeTruthy()
+    // Every gate row is present; a bucket with no project says so rather than
+    // drawing a 0% bar that would read as "all failed".
+    const rows = [...figure.querySelectorAll('.stage-progress-row')]
+    expect(rows.length).toBeGreaterThanOrEqual(5)
+    expect(figure.textContent).toContain('本阶段没有项目')
   })
 
   it('renders four radial coverage meters, one per dimension', async () => {
@@ -486,15 +591,51 @@ describe('overview page', () => {
     expect(screen.getAllByText(/还没有进展/).length).toBeGreaterThan(0)
   })
 
-  it('groups the pending rail by rule', async () => {
+  it('merges every blocker source into one list, grouped by project', async () => {
     await renderPage(makeApi())
-    expect(screen.getByText('待处理')).toBeTruthy()
-    // R11 (priority 96) sorts before R1 (priority 90).
-    const groups = [...document.querySelectorAll('.pending-group')]
-    expect(groups.length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText('阻障')).toBeTruthy()
+
+    // The panel groups by PROJECT, not by rule: the reader acts on a project.
+    const groups = [...document.querySelectorAll('.blocker-group')]
+    expect(groups.length).toBe(2)
+    // The Host ranks globally, so POC-2026-003 (R11, priority 96) leads.
+    expect(groups[0]?.textContent).toContain('某某制造产线安全接入')
     expect(groups[0]?.textContent).toContain('已达成但无下一步里程碑')
-    expect(groups[1]?.textContent).toContain('G0 必填未齐')
     expect(groups[0]?.getAttribute('data-level')).toBe('high')
+    // POC-2026-002 carries BOTH a gap and the no-progress blocker.
+    expect(groups[1]?.textContent).toContain('G0 必填未齐')
+    expect(groups[1]?.textContent).toContain('无进展记录')
+  })
+
+  it('offers a filter chip per blocker source, with its own count', async () => {
+    await renderPage(makeApi())
+    const chips = [...document.querySelectorAll('.blocker-chip')]
+    // "All" plus the two sources that actually have rows.
+    expect(chips.length).toBe(3)
+    expect(chips[0]?.getAttribute('data-active')).toBe('true')
+    const bySource = chips.map((chip) => chip.getAttribute('data-source')).filter(Boolean)
+    expect(bySource).toEqual(['gap', 'no-progress'])
+    // The gap chip counts rows, not projects: two gap rows in the fixture.
+    const gapChip = chips.find((chip) => chip.getAttribute('data-source') === 'gap')
+    expect(gapChip?.querySelector('.blocker-chip-count')?.textContent).toBe('2')
+  })
+
+  it('narrows the blocker list to one source when its chip is pressed', async () => {
+    await renderPage(makeApi())
+    const noProgressChip = [...document.querySelectorAll('.blocker-chip')]
+      .find((chip) => chip.getAttribute('data-source') === 'no-progress') as HTMLElement
+    fireEvent.click(noProgressChip)
+    // Only POC-2026-002 has no progress, so exactly one group remains.
+    expect(document.querySelectorAll('.blocker-group').length).toBe(1)
+    expect(document.querySelector('.blocker-group')?.textContent).toContain('无进展记录')
+    // Pressing the same chip again clears the filter.
+    fireEvent.click(noProgressChip)
+    expect(document.querySelectorAll('.blocker-group').length).toBe(2)
+  })
+
+  it('states how many projects are blocked, not just how many rows', async () => {
+    await renderPage(makeApi())
+    expect(screen.getByText('2 / 3 个项目有阻障')).toBeTruthy()
   })
 
   it('shows the refresh timestamp once data exists', async () => {
@@ -546,6 +687,67 @@ describe('refresh', () => {
     expect(api.calls).toBe(1)
     gate.release?.()
     await waitFor(() => expect(api.calls).toBe(1))
+  })
+})
+
+describe('export form', () => {
+  /**
+   * jsdom implements neither object URLs nor downloads, and clicking an `<a
+   * download>` in it logs "Not implemented: navigation". Both are browser
+   * features the dialog legitimately uses, so they are stubbed for the duration
+   * of this block rather than the dialog being reshaped to suit jsdom.
+   */
+  beforeAll(() => {
+    Object.defineProperty(URL, 'createObjectURL', { value: vi.fn(() => 'blob:mock'), configurable: true, writable: true })
+    Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true, writable: true })
+    HTMLAnchorElement.prototype.click = vi.fn()
+  })
+
+  it('opens from the header and preselects the visible projects', async () => {
+    await renderPage(makeApi())
+    fireEvent.click(screen.getByRole('button', { name: '导出表单' }))
+    const dialog = document.querySelector('.modal-wide') as HTMLElement
+    expect(dialog).toBeTruthy()
+    const rows = dialog.querySelectorAll('.export-row')
+    expect(rows).toHaveLength(3)
+    // Every row starts selected: "export what I am looking at" is the default.
+    expect([...rows].every((row) => row.getAttribute('data-selected') === 'true')).toBe(true)
+  })
+
+  it('asks the Host for a fill form covering the selection', async () => {
+    const api = makeApi()
+    await renderPage(api)
+    fireEvent.click(screen.getByRole('button', { name: '导出表单' }))
+    const dialog = document.querySelector('.modal-wide') as HTMLElement
+    // Uncheck one row so the request has a real selection.
+    const first = dialog.querySelector('.export-row-signature') ?? dialog.querySelectorAll('.export-row input')[0]
+    fireEvent.click(first as HTMLElement)
+    fireEvent.click(screen.getByRole('button', { name: '生成并下载' }))
+    await waitFor(() => expect(api.lastExport).toBeDefined())
+    expect(api.lastExport?.mode).toBe('fill')
+    expect(api.lastExport?.pocIds.length).toBe(2)
+  })
+
+  it('asks for a blank form when nothing is selected', async () => {
+    const api = makeApi()
+    await renderPage(api)
+    fireEvent.click(screen.getByRole('button', { name: '导出表单' }))
+    fireEvent.click(screen.getByRole('button', { name: '清空' }))
+    // With an empty selection the dialog explains it will produce a new-project
+    // form, which is a normal path rather than an error.
+    expect(document.querySelector('.helper-box')?.textContent).toContain('空白')
+    fireEvent.click(screen.getByRole('button', { name: '生成并下载' }))
+    await waitFor(() => expect(api.lastExport).toBeDefined())
+    expect(api.lastExport?.mode).toBe('blank')
+    expect(api.lastExport?.pocIds).toEqual([])
+  })
+
+  it('closes on a successful download', async () => {
+    await renderPage(makeApi())
+    fireEvent.click(screen.getByRole('button', { name: '导出表单' }))
+    expect(document.querySelector('.modal-wide')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '生成并下载' }))
+    await waitFor(() => expect(document.querySelector('.modal-wide')).toBeNull())
   })
 })
 
@@ -661,6 +863,151 @@ describe('detail page', () => {
     expect(screen.getAllByText('G0 必填完整度').length).toBeGreaterThan(0)
     expect(screen.getAllByText('计划（G1 / G2）').length).toBeGreaterThan(0)
     expect(screen.getAllByText('结论').length).toBeGreaterThan(0)
+  })
+
+  it('leads the G4 pane with the outcome, not the progress stream', async () => {
+    await renderPage(makeApi())
+    openProject('某某制造产线安全接入')
+    await waitFor(() => expect(document.querySelectorAll('.dt-stage-context').length).toBe(1))
+    // The G4 skeleton puts the four dimensions and the conclusion first.
+    const context = document.querySelector('.dt-stage-context')
+    expect(context?.textContent).toContain('G4 结果转化')
+    const firstSection = document.querySelector('.dt-pane .dsec')
+    expect(firstSection?.textContent).toContain('四维结果')
+  })
+
+  it('moves the deprioritized sections into a fold instead of dropping them', async () => {
+    await renderPage(makeApi())
+    openProject('某某制造产线安全接入')
+    await waitFor(() => expect(document.querySelectorAll('.dt-fold').length).toBe(1))
+    const fold = document.querySelector('.dt-fold') as HTMLElement
+    // Closed by default, but the sections are IN the DOM: a reader checking a
+    // previous stage's evidence can always reach them.
+    expect(fold.getAttribute('data-open')).toBe('false')
+    expect(fold.textContent).toContain('其他区块')
+    expect(fold.textContent).toContain('进展流')
+    // Opening it flips the state.
+    fireEvent.click(fold.querySelector('.dt-fold-head') as HTMLElement)
+    expect(fold.getAttribute('data-open')).toBe('true')
+  })
+
+  it('leads a G0 pane with basic info and the G0 workbench', async () => {
+    const api = makeApi()
+    await renderPage(api)
+    // POC-2026-002 is the fixture's G0 project with nothing filled in.
+    openProject('某某集团办公网改造')
+    await waitFor(() => expect(document.querySelectorAll('.dt-stage-context').length).toBe(1))
+    expect(document.querySelector('.dt-stage-context')?.textContent).toContain('G0 工作台')
+    // A G0 pane opens on "who is this" and then the gate-0 work, not on a
+    // progress stream the project does not have.
+    const titles = [...document.querySelectorAll('.dt-pane .dsec-title')].map((node) => node.textContent)
+    expect(titles[0]).toBe('基本信息')
+    expect(titles[1]).toBe('G0 必填完整度')
+  })
+
+  it('says plainly when the current stage is not recorded as done', async () => {
+    await renderPage(makeApi())
+    openProject('某某制造产线安全接入')
+    await waitFor(() => expect(document.querySelectorAll('.dt-stage-context').length).toBe(1))
+    // The G4 fixture has stageDone all true, so the honest verdict is "done".
+    expect(document.querySelector('.dt-stage-context')?.getAttribute('data-done')).toBe('true')
+    expect(document.querySelector('.dt-stage-context-state')?.textContent).toBe('本阶段已记录完成')
+  })
+
+  it('turns an empty G0 into a worklist that names the fields to fill in', async () => {
+    // A project whose G0 checklist is genuinely incomplete: this is the shape
+    // most of the real ledger has (30/30 projects, five requirements missing).
+    const record = detail()
+    const bare: ProjectDetail = {
+      ...record,
+      summary: { ...record.summary, pocId: 'POC-2026-002', name: '某某集团办公网改造', stage: 'G0', stageLabel: 'G0-立项', closed: false },
+      gate0: {
+        ...record.gate0,
+        complete: false,
+        checklist: [
+          { field: 'why_customer', present: true, value: '办公网改造需求' },
+          { field: 'why_us', present: true, value: '标杆客户' },
+          { field: 'decision_chain', present: false, value: '' },
+          { field: 'post_poc_decision', present: false, value: '' },
+          { field: 'tech_owner', present: true, value: '王工' },
+        ],
+      },
+    }
+    await renderPage(makeApi({ detailRecord: bare }))
+    openProject('某某集团办公网改造')
+    await waitFor(() => expect(document.querySelectorAll('.worklist').length).toBe(1))
+    const worklist = document.querySelector('.worklist') as HTMLElement
+    // The worklist names the ACTUAL missing fields, not "five requirements missing".
+    expect(worklist.textContent).toContain('项目流程/决策链')
+    expect(worklist.textContent).toContain('测后客户决策')
+    // Present fields are not on the list.
+    expect(worklist.textContent).not.toContain('客户技术责任人')
+    // Every item is an edit instruction, so it carries an action verb.
+    const labels = [...worklist.querySelectorAll('.worklist-label')].map((node) => node.textContent ?? '')
+    expect(labels.length).toBeGreaterThanOrEqual(2)
+    expect(labels.every((label) => label.startsWith('补'))).toBe(true)
+  })
+
+  it('reads the same blockers the portfolio panel reports', async () => {
+    await renderPage(makeApi())
+    openProject('某某集团办公网改造')
+    await waitFor(() => expect(document.querySelectorAll('.worklist').length).toBe(1))
+    const worklist = document.querySelector('.worklist') as HTMLElement
+    // POC-2026-002 carries the `no-progress` blocker on the board, so the
+    // worklist must offer exactly that edit — not a re-derived guess.
+    expect(worklist.textContent).toContain('补第一条进展')
+  })
+
+  it('does not claim completeness when no snapshot has loaded', async () => {
+    // A detail page opened with no board must not say "nothing to fill in": the
+    // worklist cannot know that, and the G0 checklist is still authoritative.
+    await renderPage(makeApi())
+    openProject('某某制造产线安全接入')
+    await waitFor(() => expect(document.querySelectorAll('.worklist').length).toBe(1))
+    // The G4 fixture has all G0 fields present, so here "done" IS correct.
+    expect(document.querySelector('.worklist')?.getAttribute('data-empty')).toBe('true')
+    expect(document.querySelector('.worklist')?.textContent).toContain('没有待补项')
+  })
+
+  it('shows the customer name, which the Host sends but the page used to drop', async () => {
+    await renderPage(makeApi())
+    openProject('某某制造产线安全接入')
+    await waitFor(() => expect(document.querySelectorAll('.dsec').length).toBeGreaterThan(0))
+    const basic = [...document.querySelectorAll('.dsec')]
+      .find((node) => node.querySelector('.dsec-title')?.textContent === '基本信息') as HTMLElement
+    expect(basic).toBeTruthy()
+    // The three org fields, the people, and the amount all live together.
+    expect(basic.textContent).toContain('人保寿险')
+    expect(basic.textContent).toContain('人保体系')
+    expect(basic.textContent).toContain('生产部')
+    expect(basic.textContent).toContain('张三')
+  })
+
+  it('lifts the decision chain out of the G0 meter into basic info', async () => {
+    await renderPage(makeApi())
+    openProject('某某制造产线安全接入')
+    await waitFor(() => expect(document.querySelectorAll('.dt-basic-decisions').length).toBe(1))
+    const decisions = document.querySelector('.dt-basic-decisions') as HTMLElement
+    expect(decisions.textContent).toContain('决策链')
+    expect(decisions.textContent).toContain('生产部提需求')
+    expect(decisions.textContent).toContain('测后决策')
+    expect(decisions.textContent).toContain('采购')
+  })
+
+  it('says a missing decision chain is missing instead of rendering nothing', async () => {
+    const record = detail()
+    const blank: ProjectDetail = {
+      ...record,
+      gate0: { ...record.gate0, decisionChain: '', postPocDecision: '' },
+    }
+    await renderPage(makeApi({ detailRecord: blank }))
+    openProject('某某制造产线安全接入')
+    await waitFor(() => expect(document.querySelectorAll('.dt-basic-decisions').length).toBe(1))
+    const decisions = document.querySelector('.dt-basic-decisions') as HTMLElement
+    // An empty decision chain is the finding the G0 gate exists to surface, so
+    // it must be stated, not silently omitted.
+    expect(decisions.textContent).toContain('还没有写清谁拍板')
+    expect(decisions.textContent).toContain('还没有写清测完之后')
   })
 
   it('shows the four dimensions as four separate summary cards', async () => {

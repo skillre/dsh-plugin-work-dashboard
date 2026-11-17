@@ -1,4 +1,32 @@
-## Current status: published, Trusted Publisher outstanding
+# Releasing @skillre/dsh-plugin-work-dashboard
+
+## Repository release identity
+
+- Package: `@skillre/dsh-plugin-work-dashboard`
+- Fleet slug: `work-dashboard`
+- Trusted Publisher repository: `skillre/dsh-plugin-work-dashboard`
+- Workflow: `.github/workflows/release.yml`
+- Protected environment: `npm-publish`
+
+<!-- fleet-managed:start -->
+## Authoritative release procedure
+
+Read the full local `AGENTS.md`, run `node scripts/fleet.mjs context --json`, then actually read the returned Fleet `docs/plugin-policy.md` and `docs/release-runbook.md` before version/release/rollback work. In the standard layout the runbook is [here](<../../docs/release-runbook.md>); resolve this link relative to this repository, never a nested cwd. This file is navigation and repository-specific evidence, not a copied second release workflow.
+
+- Parent release tools are not local npm scripts. `node scripts/fleet.mjs release:dispatch --plan` previews a verified, uniquely scoped call without running it. Other whitelist commands and arbitrary-cwd usage are in Fleet `docs/independent-workspaces.md`.
+- Actual dispatch needs direct human package@version authorization, approved commit via `DSH_RELEASE_COMMIT`, clean canonical main, matching origin/local/remote main, real compatibility evidence and the protected OIDC approval. No `--allow-dirty`, npm publish, credentials or automatic approval.
+- Bootstrap, provisioning, npm trust/login, interactive and market writes are separately reviewed parent maintenance operations; no child forwarder. Old bootstrap dry-run is not a guarantee of no side effects.
+- Changesets, final tarball tests, artifact/provenance/tag verification, cleanup and rollback follow the shared runbook. This entry/fixture check is not evidence of a mount, real publish or complete artifact verification.
+- Final installation/update/uninstall/rollback belongs to the user's Plugins manager; [UNINSTALL](<UNINSTALL.md>) gives this plugin's user-facing path. CLI/profile recovery, when the manager cannot start, is a separately authorized path that preserves preexisting state.
+
+Keep package-specific release facts and dated history below; examples/history are not current authority or proof of remote state.
+<!-- fleet-managed:end -->
+
+## Plugin-specific release notes
+
+**Historical evidence only, as recorded on 2026-11-13. Current remote/Trusted Publisher state was not rechecked in this migration. The old command below records prior handoff, not new authorization.**
+
+### Historical status (2026-11-13): published, Trusted Publisher outstanding
 
 `@skillre/dsh-plugin-work-dashboard@0.6.0` was published to the registry on 2026-11-13
 (`dist-tag latest`). That was the first publish and it was done by hand, because npm cannot attach a
@@ -24,49 +52,3 @@ npm run release:auth -- work-dashboard --action trust
 `--allow-publish` is required; npm rejects the command without one of the permission flags. As of
 2026-11-13 the confirmation was not completed, so `npm trust list` has not been run and no OIDC
 publish has happened yet.
-
-## Bootstrap once (historical — already done)
-
-1. Enable **Settings → Actions → General → Allow GitHub Actions to create and approve pull requests**.
-2. Review branch protection: a PR created with the default `GITHUB_TOKEN` does not trigger a new `pull_request` workflow. Manually dispatch checks, prepare the version PR as a human, or use a reviewed GitHub App when a required status would otherwise be absent. Do not silently add a long-lived PAT.
-3. With the pinned Node/npm baseline, run `npm run check && npm run release:prepare`, inspect it, then manually publish that exact `./release-artifact/*.tgz` with login and 2FA; never publish a fresh implicit repack and never store a token in the repository. CI later requires the registry integrity to match its deterministic artifact.
-4. Configure npm Trusted Publishing for `skillre/dsh-plugin-work-dashboard`, workflow `release.yml`, environment `npm-publish`.
-5. Create the protected `npm-publish` GitHub Environment with a human reviewer and `main` restriction.
-6. Set repository variable `NPM_TRUSTED_PUBLISHING_READY=true` only after the publisher configuration matches exactly.
-
-## Why npm is the only update channel
-
-The plugin manager's Versions block (`listVersions` / `updateBundle`, DSH `0.2.2-alpha.2` onward) refuses to
-update anything that is not a third-party bundle installed from the registry under its own package name. A
-`github:` / `git+` / `file:` / tarball install never appears there, so the only way to update it is uninstall
-and reinstall. That is why publishing to npm is not just distribution — it is the update mechanism itself.
-
-Two things this repository must therefore keep true, or it silently loses updatability:
-
-- `cordis.patch.yml` declares no `PROTECTED_PLUGINS` management row (`@deepseek-ai/dsh-plugin-manager`,
-  `cordis-plugin-loader`, `dsh-api-gateway`, …). A bundle shipping one becomes unremovable and with it
-  un-updatable.
-- `engines.dsh` stays honest. An update candidate is first checked against `engines.dsh` (falling back to the
-  `@deepseek-ai/dsh*` peers), so a range that is too wide gets rejected as `incompatible-version` and one that
-  is too narrow blocks versions that would work. It states the DSH line this package was really mounted and
-  tested against, and must be re-verified rather than widened on a guess.
-
-Update semantics, as documented for users: versions only move forward; the target is stored as an exact
-version (and a failed update restores the previous exact version, even if the original spec was a range); an
-update is two profile operations (remove + install) so the bundle may land at the end of the list under HMR;
-a failure rolls back, and if the rollback itself fails the package is left uninstalled. The plugin page has no
-entry for version exemptions — only the CLI and agent tools do.
-
-## Every release
-
-1. Include a Changeset with the feature/fix PR.
-2. Update README compatibility claims and `compatibility.json` from real tarball mount evidence, then rebuild and remount the exact final tarball that contains that evidence.
-3. Merge to `main`; review the Changesets version PR and CHANGELOG.
-4. Merge the version PR and approve the protected publication Environment.
-5. Verify npm version, tarball files, provenance, GitHub tag/release and a clean-profile install.
-
-The workflow builds and checks the tarball in an unprivileged job and retains the immutable artifact for 14 days to allow protected-environment review. The OIDC job checks out no source, installs no project dependencies, disables package-manager caching, verifies SHA-1 and SHA-512, pins the npm registry, and runs `npm publish --ignore-scripts` on that tarball only. Stable versions use the `latest` dist-tag; SemVer prereleases use `next`. A full rerun skips publication only when npm already holds the exact same integrity. GitHub tag/release creation occurs afterward in a separate job without OIDC permission.
-
-## Rollback
-
-Never overwrite an npm version. Deprecate a bad version, tell users which known-good version to pin, and publish a new fix. See `UNINSTALL.md` for profile commands.

@@ -8,7 +8,7 @@
  * boundary — only lossless JSON.
  */
 import type { ClientConnectionLike } from './contracts.js';
-import type { GlobalTimeline, ProjectDetail, RefreshOutcome, RiskBoard, Snapshot } from '../types.js';
+import type { ExportFormResult, GlobalTimeline, ProjectDetail, RefreshOutcome, RiskBoard, Snapshot } from '../types.js';
 /** Failure raised by the Host; `code` is stable enough to switch on. */
 export declare class ActionError extends Error {
     readonly code: string;
@@ -30,6 +30,13 @@ export interface ClientApi {
     risks(signal?: AbortSignal): Promise<RiskBoard>;
     /** Rounds across all projects, newest first. */
     timeline(signal?: AbortSignal): Promise<GlobalTimeline>;
+    /**
+     * Build the collection form.
+     *
+     * Generated on the Host because the generator needs the YAML serializer, which
+     * must not be bundled into the browser module.
+     */
+    exportForm(mode: 'fill' | 'blank', pocIds: readonly string[], signal?: AbortSignal): Promise<ExportFormResult>;
 }
 /** Create the API bound to this plugin's Fiber lifetime. */
 export declare function createApi(connection: ClientConnectionLike, lifetime: AbortSignal): ClientApi;

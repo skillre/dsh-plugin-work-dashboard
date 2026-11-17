@@ -10,5 +10,5 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["tests", "src/form.v1-deferred.ts"]
+  "exclude": ["tests"]
 }

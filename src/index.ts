@@ -21,10 +21,12 @@ import { PocStore } from './store.js'
 import { RepoCache, RepoError, assertSafeCacheRoot } from './repo.js'
 import { buildRiskBoard } from './risks.js'
 import { buildGlobalTimeline } from './timeline.js'
+import { text } from './gap.js'
+import { buildFormHtml, formFileName, projectForForm } from './form.js'
 import { registerBundledSkills } from './skill.js'
 import { createExecuteRoute } from './transport.js'
 import type { ConsoleActions, HostConnection } from './transport.js'
-import type { GlobalTimeline, PocRecord, RiskBoard } from './types.js'
+import type { ExportFormResult, GlobalTimeline, PocRecord, RiskBoard } from './types.js'
 
 export { resolveConfig }
 export { Config } from './config.js'
@@ -108,6 +110,33 @@ export function createRuntime(config: WorkDashboardConfig, options: { home?: str
     async timeline(): Promise<GlobalTimeline> {
       await this.prepare()
       return buildGlobalTimeline(await loadOrEmpty(), { stallDays: config.stallDays })
+    },
+    /**
+     * Build the collection form.
+     *
+     * `blank` is the new-project form and ignores the ids. `fill` selects the
+     * named projects; an id that matches nothing is simply absent from the form
+     * rather than an error, because a stale browser tab holding an id that was
+     * renamed in the ledger should still produce the projects it can.
+     */
+    async exportForm(mode, pocIds): Promise<ExportFormResult> {
+      await this.prepare()
+      const stamp = now()
+      if (mode === 'blank') {
+        return {
+          html: buildFormHtml({ mode: 'blank', projects: [], now: stamp }),
+          fileName: formFileName({ mode: 'blank', pocIds: [], now: stamp }),
+          projectCount: 0,
+        }
+      }
+      const wanted = new Set(pocIds)
+      const records = (await loadOrEmpty()).filter((record) => wanted.has(text(record.poc_id)))
+      const projects = records.map(projectForForm)
+      return {
+        html: buildFormHtml({ mode: 'fill', projects, now: stamp }),
+        fileName: formFileName({ mode: 'fill', pocIds: records.map((record) => text(record.poc_id)), now: stamp }),
+        projectCount: projects.length,
+      }
     },
   }
 }

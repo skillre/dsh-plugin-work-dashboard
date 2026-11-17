@@ -197,6 +197,30 @@ export const DETAIL_CSS = `
 .wd-shell .dt-prose-body { margin: 0; font-size: 12px; line-height: 19px; color: var(--dsw-alias-label-secondary); }
 .wd-shell .dt-prose[data-empty="true"] .dt-prose-body { color: var(--dsw-alias-label-tertiary); font-style: italic; }
 
+/* ---------- basic information ---------- */
+.wd-shell .dt-basic-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 18px; margin: 0 0 12px;
+}
+@media (max-width: 900px) { .wd-shell .dt-basic-grid { grid-template-columns: minmax(0, 1fr); } }
+.wd-shell .dt-basic-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.wd-shell .dt-basic-label {
+  flex: none; width: 108px;
+  font-size: 11px; line-height: 17px; color: var(--dsw-alias-label-tertiary);
+}
+.wd-shell .dt-basic-value {
+  margin: 0; font-size: 12px; line-height: 17px; font-weight: 500;
+  color: var(--wd-text); overflow-wrap: anywhere;
+}
+.wd-shell .dt-basic-row[data-empty="true"] .dt-basic-value {
+  font-weight: 400; color: var(--dsw-alias-label-tertiary); font-style: italic;
+}
+.wd-shell .dt-basic-decisions {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px; padding-top: 11px; border-top: 1px solid var(--wd-hairline);
+}
+@media (max-width: 900px) { .wd-shell .dt-basic-decisions { grid-template-columns: minmax(0, 1fr); } }
+
 /* ---------- progress stream ---------- */
 .wd-shell .prog-stream { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .wd-shell .prog-item { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 12px; padding-bottom: 14px; }

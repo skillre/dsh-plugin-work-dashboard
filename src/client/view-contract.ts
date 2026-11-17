@@ -12,6 +12,7 @@
  */
 
 import type {
+  BlockerRow,
   GapItem,
   PortfolioAnalysis,
   ProjectDetail,
@@ -107,6 +108,14 @@ export interface DetailProps {
   detail: ProjectDetail
   /** Gaps of this project only. */
   gaps: GapItem[]
+  /**
+   * This project's blocker rows, taken from the portfolio board.
+   *
+   * Passed in rather than recomputed so the detail worklist and the overview
+   * panel can never disagree about what a project is missing. `null` when the
+   * caller has no board (a detail opened before the first snapshot).
+   */
+  blockers: BlockerRow[] | null
   locale: string
   t: Translate
   /** Position within the shell's current list, for the prev/next affordance. */

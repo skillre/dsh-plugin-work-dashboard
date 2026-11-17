@@ -49,7 +49,9 @@ import {
   type RefreshPreference,
   type ViewPreference,
 } from './preferences.js'
+import { clockOf, stageLabel } from './format.js'
 import { DetailPage } from './detail.jsx'
+import { ExportFormDialog } from './export-form.jsx'
 import { OverviewPage } from './overview.jsx'
 import { RiskBoardPage, TimelinePage } from './insights.jsx'
 import { CONSOLE_CSS } from './styles.js'
@@ -57,7 +59,6 @@ import { format, type Translate } from './text.js'
 import {
   NO_FILTERS,
   activeFilterCount,
-  filtersAreEmpty,
   type ActiveFilters,
   type FilterOption,
   type FilterOptions,
@@ -89,34 +90,6 @@ export function SidebarGlyph({ size = 18 }: { size?: number; active?: boolean })
   )
 }
 
-/** A `date` (or ISO stamp) rendered for the active locale; `''` stays `''`. */
-export function formatStamp(value: string | null, locale: string, withTime = false): string {
-  if (value === null || value === '') return ''
-  const stamp = new Date(value.length === 10 ? `${value}T00:00:00` : value)
-  if (Number.isNaN(stamp.getTime())) return value
-  const zh = locale.toLowerCase().startsWith('zh')
-  return stamp.toLocaleString(zh ? 'zh-CN' : 'en-US', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
-  })
-}
-
-/** A wall-clock `HH:MM` for the "refreshed at" status text. */
-function clockOf(value: string | null, locale: string): string {
-  if (value === null) return ''
-  const stamp = new Date(value)
-  if (Number.isNaN(stamp.getTime())) return ''
-  return stamp.toLocaleTimeString(locale.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit' })
-}
-
-/** Format 万元 with thousands separators. */
-export function formatWan(value: number): string {
-  const rounded = Math.round(value * 10) / 10
-  return rounded.toLocaleString('zh-CN', { maximumFractionDigits: 1 })
-}
-
 /** Map a Host error onto a dictionary key, keeping the Host message as detail. */
 export function errorText(t: Translate, error: unknown): string {
   if (error instanceof ActionError) {
@@ -128,14 +101,6 @@ export function errorText(t: Translate, error: unknown): string {
   }
   if (error instanceof Error) return error.message
   return t('error.failed')
-}
-
-/** The stage label for a raw stage id, via the dictionary. */
-function stageLabel(t: Translate, stage: string): string {
-  if (stage === 'closed') return t('stageClosed')
-  if (stage === 'unknown') return t('stageUnknown')
-  if ((STAGES as readonly string[]).includes(stage)) return t(`stage${stage}`)
-  return stage
 }
 
 /**
@@ -502,6 +467,11 @@ function Toolbar({
       </div>
       <div className="toolbar-row toolbar-row-filters">
         <FilterChips label={t('filterSystem')} options={options.system} selected={filters.system} onSelect={(value) => onFilters({ ...filters, system: value })} />
+        {/* The company dimension was computed from the first release but never
+            offered: `buildFilterOptions` returned it, the contract declared it,
+            and no chip read it. A dimension the shell maintains but the toolbar
+            hides is a filter the user cannot reach. */}
+        <FilterChips label={t('filterCompany')} options={options.company} selected={filters.company} onSelect={(value) => onFilters({ ...filters, company: value })} />
         <FilterChips label={t('filterStage')} options={options.stage} selected={filters.stage} onSelect={(value) => onFilters({ ...filters, stage: value })} />
         <FilterChips label={t('filterStatus')} options={options.status} selected={filters.status} onSelect={(value) => onFilters({ ...filters, status: value })} />
         <FilterChips label={t('filterType')} options={options.pocType} selected={filters.pocType} onSelect={(value) => onFilters({ ...filters, pocType: value })} />
@@ -522,6 +492,7 @@ export function WorkDashboardPage({ api, locale, t }: WorkDashboardPageProps): J
   const [preference, setPreference] = useState<RefreshPreference>(DEFAULT_PREFERENCE)
   const [viewPreference, setViewPreference] = useState<ViewPreference>(DEFAULT_VIEW_PREFERENCE)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
 
   // Session-only state: cleared on unmount by construction, not persisted.
   const [filters, setFilters] = useState<ActiveFilters>(NO_FILTERS)
@@ -766,6 +737,18 @@ export function WorkDashboardPage({ api, locale, t }: WorkDashboardPageProps): J
   }, [page.kind, visibleProjects, selectedId, backToOverview, openDetail])
 
   /** Prev/next within the list the detail page was opened from. */
+  /**
+   * One project's blocker rows, from the portfolio board.
+   *
+   * The detail page gets the same rows the overview panel groups, so the two
+   * cannot disagree. `null` when no snapshot has arrived yet, which the detail
+   * page treats as "no worklist to show" rather than as "nothing missing".
+   */
+  const projectBlockers = useCallback((pocId: string) => {
+    if (snapshot === null) return null
+    return snapshot.blockers.rows.filter((row) => row.pocId === pocId)
+  }, [snapshot])
+
   const detailNeighbours = useMemo(() => {
     if (page.kind !== 'detail') return { prev: null as string | null, next: null as string | null, index: 0, total: visibleProjects.length }
     const index = visibleProjects.findIndex((project) => project.pocId === page.pocId)
@@ -811,7 +794,7 @@ export function WorkDashboardPage({ api, locale, t }: WorkDashboardPageProps): J
                   <h1 className="page-title">{t('modulePoc')}</h1>
                   <p className="page-subtitle">{t('subtitle')}</p>
                   <p className="page-source">
-                    {t('dataSource')}：<code>github.com/{snapshot?.repository ?? ''}</code>
+                    <span>{format(t('dataSourceLine'), { repository: snapshot?.repository ?? '' })}</span>
                     <span>·</span>
                     <span>{refreshed}</span>
                   </p>
@@ -825,6 +808,9 @@ export function WorkDashboardPage({ api, locale, t }: WorkDashboardPageProps): J
                   </button>
                   <button type="button" className="btn" onClick={openTimeline} disabled={!overviewReady}>
                     {t('timelineNav')}
+                  </button>
+                  <button type="button" className="btn" onClick={() => setExportOpen(true)} disabled={!overviewReady}>
+                    {t('exportNav')}
                   </button>
                   <button type="button" className="btn" onClick={() => setSettingsOpen(true)} title={autoNote}>
                     {t('refreshSettings')}
@@ -885,6 +871,7 @@ export function WorkDashboardPage({ api, locale, t }: WorkDashboardPageProps): J
                   <DetailPage
                     detail={detail}
                     gaps={detail.gaps}
+                    blockers={projectBlockers(detail.summary.pocId)}
                     locale={activeLocale}
                     t={t}
                     position={{ index: detailNeighbours.index + 1, total: detailNeighbours.total }}
@@ -934,6 +921,17 @@ export function WorkDashboardPage({ api, locale, t }: WorkDashboardPageProps): J
           t={t}
           onSave={savePreference}
           onCancel={() => setSettingsOpen(false)}
+        />
+      ) : null}
+      {exportOpen ? (
+        <ExportFormDialog
+          api={api}
+          // The selection defaults to what the filters show, which is what the
+          // reader means by "export these" — not the whole ledger.
+          projects={visibleProjects}
+          t={t}
+          onClose={() => setExportOpen(false)}
+          onError={(message) => setFailure(message)}
         />
       ) : null}
     </>

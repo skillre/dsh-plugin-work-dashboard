@@ -10,7 +10,7 @@
  * re-filters: if the cards say "12 projects" and the table says "12 projects",
  * that has to be the same twelve, computed once.
  */
-import type { GapItem, PortfolioAnalysis, ProjectDetail, ProjectSummary, RiskBoard, GlobalTimeline, Snapshot, SortKey, StageId, ViewMode } from '../types.js';
+import type { BlockerRow, GapItem, PortfolioAnalysis, ProjectDetail, ProjectSummary, RiskBoard, GlobalTimeline, Snapshot, SortKey, StageId, ViewMode } from '../types.js';
 import type { Translate } from './text.js';
 /** The filter dimensions the toolbar exposes. `null` means "not filtered". */
 export interface ActiveFilters {
@@ -77,6 +77,14 @@ export interface DetailProps {
     detail: ProjectDetail;
     /** Gaps of this project only. */
     gaps: GapItem[];
+    /**
+     * This project's blocker rows, taken from the portfolio board.
+     *
+     * Passed in rather than recomputed so the detail worklist and the overview
+     * panel can never disagree about what a project is missing. `null` when the
+     * caller has no board (a detail opened before the first snapshot).
+     */
+    blockers: BlockerRow[] | null;
     locale: string;
     t: Translate;
     /** Position within the shell's current list, for the prev/next affordance. */

@@ -13,11 +13,15 @@ The plugin used to be called "POC console" and served one ledger. It became a *c
 ```
 Work Dashboard (plugin)
 └── POC Operations (module 1, the only implemented one)
-    ├── Portfolio band   stage funnel / system-company / type mix / amount concentration / dimension coverage / gap rules
+    ├── KPI strip        total / in progress / budget / blocked / G0 passed + stage chips
+    ├── Portfolio band   stage funnel (with in-stage completion) / system-company / type mix / amount concentration / dimension coverage / gap rules
+    ├── Budget panel     G0 passed / awaiting review / no amount, plus the system split and concentration
     ├── Projects         the same list, read three ways: cards · board · table
-    ├── Project detail   sticky identity rail + progress stream / four dimensions / G0 meter / plan / outcome
+    ├── Blockers         five sources merged and grouped by project: gap rules / stalled / no amount / no progress / no stage date
+    ├── Project detail   stage-aware skeleton: basic info / worklist, then the blocks the current gate needs
     ├── Risk board       severity swimlanes + a distribution figure
-    └── Global timeline  grouped by month + a monthly distribution + the silent projects
+    ├── Global timeline  grouped by month + a monthly distribution + the silent projects
+    └── Export form      a self-contained v3 collection form whose YAML can be committed as-is
 ```
 
 ## Three bundled skills
@@ -109,9 +113,11 @@ Grouped by **rule** rather than flattened: twelve rules across twenty-three proj
 - **Risk board**: severity swimlanes (high → medium → low → unrated) with a distribution figure above them; both come from one bucketing pass, so the figure and the list cannot disagree.
 - **Global timeline**: grouped by month, with a month divider and a monthly distribution per group, newest first inside each group; rounds with no evidence or no customer feedback are marked explicitly.
 
-### Export form (not offered in this release)
+### Collection form
 
-The v1 form generator models fields the v3 ledger no longer has, so it is hidden rather than shipped: handing colleagues YAML the ledger cannot read is worse than having no form. The source is preserved at `src/form.v1-deferred.ts` for a later rewrite.
+The **Export form** button in the header generates a self-contained HTML file for the projects the current filters show: double-click to fill in, drafts autosave locally, the gap rules' counts (2–3 criteria, 3–5 scenarios, at most 3 risks) are checked live, and it downloads real YAML — one file per project. Selecting nothing produces a blank new-project form.
+
+The generated YAML is the v3 shape and reads back through this plugin's own parser; the form only asks for v3 fields (the five G0 prerequisites, the plan, and one appended progress entry), unlike the v1 generator it replaces.
 
 ## The twelve gap rules
 

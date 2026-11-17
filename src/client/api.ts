@@ -10,7 +10,7 @@
 
 import type { ClientConnectionLike, RpcResult } from './contracts.js'
 import { ENDPOINT } from '../types.js'
-import type { GlobalTimeline, PocRequest, ProjectDetail, RefreshOutcome, RiskBoard, Snapshot } from '../types.js'
+import type { ExportFormResult, GlobalTimeline, PocRequest, ProjectDetail, RefreshOutcome, RiskBoard, Snapshot } from '../types.js'
 
 /** Failure raised by the Host; `code` is stable enough to switch on. */
 export class ActionError extends Error {
@@ -36,6 +36,13 @@ export interface ClientApi {
   risks(signal?: AbortSignal): Promise<RiskBoard>
   /** Rounds across all projects, newest first. */
   timeline(signal?: AbortSignal): Promise<GlobalTimeline>
+  /**
+   * Build the collection form.
+   *
+   * Generated on the Host because the generator needs the YAML serializer, which
+   * must not be bundled into the browser module.
+   */
+  exportForm(mode: 'fill' | 'blank', pocIds: readonly string[], signal?: AbortSignal): Promise<ExportFormResult>
 }
 
 /** Unwrap one endpoint result, converting a failure into a thrown error. */
@@ -59,5 +66,6 @@ export function createApi(connection: ClientConnectionLike, lifetime: AbortSigna
     detail: (pocId, signal) => call<ProjectDetail>({ action: 'detail', pocId }, signal),
     risks: (signal) => call<RiskBoard>({ action: 'risks' }, signal),
     timeline: (signal) => call<GlobalTimeline>({ action: 'timeline' }, signal),
+    exportForm: (mode, pocIds, signal) => call<ExportFormResult>({ action: 'export-form', mode, pocIds: [...pocIds] }, signal),
   }
 }

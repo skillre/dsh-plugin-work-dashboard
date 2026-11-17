@@ -41,6 +41,7 @@
 import type { RiskRow, TimelineEntry } from '../types.js'
 import type { RiskBoardProps, TimelineProps } from './view-contract.js'
 import { BarList, InlineMeter, SeverityBar, Sparkbars } from './charts.jsx'
+import { formatDate } from './format.js'
 import { format } from './text.js'
 import type { Translate } from './text.js'
 
@@ -85,24 +86,6 @@ function laneOf(level: string): LaneKey {
 /** `name · id`, or just the id when the ledger left the name blank. */
 function projectLabel(name: string, pocId: string): string {
   return name === '' ? pocId : `${name} · ${pocId}`
-}
-
-/**
- * A `YYYY-MM-DD` date rendered for the active locale.
- *
- * The ledger stores calendar dates, not instants, so the string is parsed as
- * local midnight — `new Date('2026-11-01')` alone is UTC and would print the
- * previous day west of Greenwich.
- */
-function formatDate(value: string, locale: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value === '' ? '—' : value
-  const stamp = new Date(`${value}T00:00:00`)
-  if (Number.isNaN(stamp.getTime())) return value
-  return stamp.toLocaleDateString(locale.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
 }
 
 /**
@@ -495,7 +478,7 @@ export function TimelinePage(props: TimelineProps): JSX.Element {
                       </div>
                       <article className="tl-card">
                         <header className="tl-card-head">
-                          <time className="tl-date" dateTime={entry.date}>{formatDate(entry.date, locale)}</time>
+                          <time className="tl-date" dateTime={entry.date}>{formatDate(entry.date, locale, '—')}</time>
                           <span className="tl-type">{entry.type === '' ? t('roundUnnumbered') : entry.type}</span>
                           <button
                             type="button"

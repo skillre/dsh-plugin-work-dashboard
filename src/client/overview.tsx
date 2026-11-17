@@ -27,10 +27,9 @@
  * nothing here filters or sorts: the shell already did.
  */
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { AmountRow, DimensionKey, GapItem, OrgBucket, ProjectSummary, StageBucket, TypeBucket } from '../types.js'
 import { DIMENSIONS, STAGES } from '../types.js'
-import { RULE_META } from '../gap.js'
 import {
   BarList,
   ColumnChart,
@@ -41,7 +40,10 @@ import {
   StageRailMini,
   dimensionTone,
 } from './charts.jsx'
+import { BlockerPanel } from './blockers.jsx'
+import { BudgetPanel, KpiStrip, StageProgressFigure } from './summary.jsx'
 import { format, type Translate } from './text.js'
+import { formatDate, formatWan, stageBucketKey, stageLabel } from './format.js'
 import type { OverviewProps } from './view-contract.js'
 
 /** The four dimension keys mapped onto their dictionary labels. */
@@ -50,33 +52,6 @@ const DIMENSION_TEXT: Record<DimensionKey, string> = {
   evidence: 'dimEvidence',
   recognition: 'dimRecognition',
   nextMilestone: 'dimNextMilestone',
-}
-
-/** Format 万元 with thousands separators. */
-function formatWan(value: number): string {
-  const rounded = Math.round(value * 10) / 10
-  return rounded.toLocaleString('zh-CN', { maximumFractionDigits: 1 })
-}
-
-/** A `YYYY-MM-DD` date rendered for the active locale; anything else passes through. */
-function formatDate(value: string | null, locale: string): string {
-  if (value === null || value === '') return '—'
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
-  const stamp = new Date(`${value}T00:00:00`)
-  if (Number.isNaN(stamp.getTime())) return value
-  return stamp.toLocaleDateString(locale.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
-}
-
-/** The stage bucket label, via the dictionary. */
-function stageLabel(t: Translate, key: string): string {
-  if (key === 'closed') return t('stageClosed')
-  if (key === 'unknown') return t('stageUnknown')
-  if ((STAGES as readonly string[]).includes(key)) return t(`stage${key}`)
-  return key
 }
 
 /** The gap badge on a card: severity first, then the count, then nothing. */
@@ -244,7 +219,7 @@ function BoardCard({ project, t, onOpen }: { project: ProjectSummary; t: Transla
  */
 function ProjectBoard({ projects, t, onOpen }: { projects: ProjectSummary[]; t: Translate; onOpen(pocId: string): void }): JSX.Element {
   const columns = BOARD_KEYS.map((key) => {
-    const rows = projects.filter((project) => (project.closed ? 'closed' : project.stage ?? 'unknown') === key)
+    const rows = projects.filter((project) => stageBucketKey(project) === key)
     return {
       key,
       label: stageLabel(t, key),
@@ -406,75 +381,6 @@ function ProjectTable({ projects, selectedId, locale, t, sortKey, sortAsc, onSor
   )
 }
 
-/** One gap row inside a pending group. */
-function PendingGap({ item, t, onOpen }: { item: GapItem; t: Translate; onOpen(pocId: string): void }): JSX.Element {
-  return (
-    <div className="pending-gap">
-      <div className="pending-gap-copy">
-        {format(t(`gap.${item.rule}.copy`), {
-          ...(item.params ?? {}),
-          // -1 is the Host's sentinel for "no timeline record at all", which is
-          // not the same thing as "not refreshed yet".
-          days: item.params?.days === -1 ? t('noTimeline') : String(item.params?.days ?? ''),
-        })}
-      </div>
-      <div className="pending-gap-project">
-        <button type="button" className="pending-link" onClick={() => onOpen(item.pocId)}>
-          {item.pocName === '' ? item.pocId : `${item.pocName} · ${item.pocId}`}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-/**
- * The pending rail, grouped by rule.
- *
- * Grouping is the point: twelve rules over many projects is a systemic pattern,
- * so the rail says "nine projects are missing the decision chain" rather than
- * repeating the same finding nine times. Groups collapse, and the collapse state
- * is local presentation state, not page state.
- */
-function PendingRail({ gaps, t, onOpen }: { gaps: GapItem[]; t: Translate; onOpen(pocId: string): void }): JSX.Element {
-  const groups = new Map<string, GapItem[]>()
-  for (const item of gaps) {
-    const existing = groups.get(item.rule)
-    if (existing === undefined) groups.set(item.rule, [item])
-    else existing.push(item)
-  }
-  const ordered = [...groups.entries()].sort((left, right) => {
-    const leftMeta = RULE_META[left[0] as GapItem['rule']]
-    const rightMeta = RULE_META[right[0] as GapItem['rule']]
-    return rightMeta.priority - leftMeta.priority || leftMeta.no - rightMeta.no
-  })
-
-  return (
-    <div className="pending">
-      {ordered.map(([rule, items]) => {
-        const meta = RULE_META[rule as GapItem['rule']]
-        const visible = items.slice(0, 3)
-        return (
-          <section key={rule} className="pending-group" data-level={meta.level} aria-label={format(t(`gap.${rule}.title`), { ...(items[0]?.params ?? {}) })}>
-            <header className="pending-group-head">
-              <span className="pending-rule-no">R{meta.no}</span>
-              <span className="pending-rule-title">{format(t(`gap.${rule}.title`), { ...(items[0]?.params ?? {}) })}</span>
-              <span className="pending-rule-count">{format(t('pendingRuleCount'), { count: items.length })}</span>
-            </header>
-            <div className="pending-group-body">
-              {visible.map((item, index) => (
-                <PendingGap key={`${item.pocId}:${index}`} item={item} t={t} onOpen={onOpen} />
-              ))}
-              {items.length > visible.length ? (
-                <div className="pending-more">{format(t('pendingMoreProjects'), { count: items.length - visible.length })}</div>
-              ) : null}
-            </div>
-          </section>
-        )
-      })}
-    </div>
-  )
-}
-
 /** The band: six figures, each a reading and a filter. */
 function PortfolioBand({ props }: { props: OverviewProps }): JSX.Element {
   const { analysis, filters, t, onFilter, onOpen } = props
@@ -572,6 +478,14 @@ function PortfolioBand({ props }: { props: OverviewProps }): JSX.Element {
               .filter((bucket) => bucket.count > 0)
               .map((bucket) => ({ key: bucket.key, label: stageLabel(t, bucket.key), tone: 'blue', value: format(t('stageAmountLabel'), { amount: formatWan(bucket.amountWan) }) }))}
           />
+          {/* The funnel says how many projects sit at each gate; this says how
+              many have that gate's own evidence. On a ledger where every project
+              is at G0 the funnel collapses to one column, and this is the only
+              way to tell "not started" from "started but not cleared". */}
+          <div className="pf-subfigure">
+            <span className="pf-subfigure-label">{t('stageProgressLabel')}</span>
+            <StageProgressFigure analysis={analysis} projects={props.projects} t={t} />
+          </div>
         </div><div className="chart-block pf-block" data-span="4">
           <div className="chart-block-head">
             <h3 className="chart-block-title">{t('bandDims')}</h3>
@@ -659,13 +573,39 @@ function FilteredEmpty({ t, onClearFilters }: { t: Translate; onClearFilters(): 
   )
 }
 
-/** The overview: the band, the list in its current reading, and the pending rail. */
+/** The overview: the band, the list in its current reading, and the blocker panel. */
 export function OverviewPage(props: OverviewProps): JSX.Element {
-  const { projects, gaps, viewMode, selectedId, locale, t, filteredOut, onOpen, onClearFilters, onSort, sortKey, sortAsc } = props
+  const { projects, viewMode, selectedId, locale, t, filteredOut, onOpen, onClearFilters, onSort, sortKey, sortAsc } = props
+
+  // The blocker panel must describe the same project set as the list beside it,
+  // or a blocker would name a project the reader cannot see. `null` means "the
+  // snapshot is fully visible", so the Host's own list can be used verbatim.
+  const visibleIds = useMemo(() => {
+    if (projects.length === props.snapshot.projects.length) return null
+    return new Set(projects.map((project) => project.pocId))
+  }, [projects, props.snapshot.projects.length])
+
+  const visibleBlockerCount = useMemo(
+    () => (visibleIds === null
+      ? props.snapshot.blockers.rows.length
+      : props.snapshot.blockers.rows.filter((row) => visibleIds.has(row.pocId)).length),
+    [props.snapshot.blockers.rows, visibleIds],
+  )
 
   return (
     <>
+      <KpiStrip
+        stats={props.snapshot.stats}
+        analysis={props.analysis}
+        blockedCount={props.snapshot.blockers.projectsBlocked}
+        total={props.snapshot.projects.length}
+        activeStage={props.filters.stage}
+        t={t}
+        onFilter={(next) => props.onFilter(next)}
+        onClearFilters={props.onClearFilters}
+      />
       <PortfolioBand props={props} />
+      <BudgetPanel projects={props.projects} analysis={props.analysis} t={t} />
       <div className="workspace-grid">
         <div className="primary-column">
           <div className="panel">
@@ -711,16 +651,22 @@ export function OverviewPage(props: OverviewProps): JSX.Element {
         <div className="secondary-column">
           <div className="panel">
             <div className="panel-header">
-              <h2 className="panel-title">{t('pendingTitle')}</h2>
-              <span className="panel-kicker">{format(t('pendingCount'), { count: gaps.length })}</span>
+              <h2 className="panel-title">{t('blockerTitle')}</h2>
+              <span className="panel-kicker">{format(t('blockerCount'), { count: visibleBlockerCount })}</span>
             </div>
+            <div className="panel-note">{format(t('blockerProjectsNote'), { blocked: props.snapshot.blockers.projectsBlocked, total: props.snapshot.blockers.projectsTotal })}</div>
             <div className="panel-body">
-              {gaps.length === 0 ? (
+              {visibleBlockerCount === 0 ? (
                 <div className="panel-body padded">
-                  <div className="empty-copy" style={{ margin: 0 }}>{filteredOut ? t('pendingEmptyFiltered') : t('pendingEmpty')}</div>
+                  <div className="empty-copy" style={{ margin: 0 }}>{filteredOut ? t('blockerEmptyFiltered') : t('blockerEmpty')}</div>
                 </div>
               ) : (
-                <PendingRail gaps={gaps} t={t} onOpen={onOpen} />
+                <BlockerPanel
+                  board={props.snapshot.blockers}
+                  visibleIds={visibleIds}
+                  t={t}
+                  onOpen={onOpen}
+                />
               )}
             </div>
           </div>

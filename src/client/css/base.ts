@@ -389,6 +389,45 @@ body[data-ds-dark-theme] .wd-shell {
 .wd-shell .modal-content { padding: 15px 19px; display: flex; flex-direction: column; gap: 5px; overflow: auto; }
 .wd-shell .modal-footer { display: flex; align-items: center; gap: 8px; padding: 13px 19px; border-top: 1px solid var(--wd-hairline); background: var(--wd-inset); }
 .wd-shell .modal-footer .spacer { flex: 1 1 auto; }
+/* The export dialog needs a wider box: it lists projects, and 452px clipped the
+   company name on every row. */
+.wd-shell .modal-wide { width: min(560px, 100%); }
+.wd-shell .modal-lead {
+  margin: 0 0 4px; font-size: 12px; line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+.wd-shell .export-toolbar {
+  display: flex; align-items: center; gap: 7px;
+  padding: 8px 0 6px;
+}
+.wd-shell .export-count {
+  margin-left: auto; font-size: 11px; line-height: 16px;
+  color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums;
+}
+.wd-shell .export-list {
+  list-style: none; margin: 0; padding: 0;
+  max-height: 42vh; overflow: auto;
+  border: 1px solid var(--wd-hairline); border-radius: 9px;
+}
+.wd-shell .export-row {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 8px 11px; cursor: pointer;
+  border-bottom: 1px solid var(--wd-hairline);
+  transition: background .11s ease;
+}
+.wd-shell .export-list li:last-child .export-row { border-bottom: 0; }
+.wd-shell .export-row:hover { background: var(--wd-inset); }
+.wd-shell .export-row[data-selected="true"] { background: var(--wd-primary-soft); }
+.wd-shell .export-row input[type="checkbox"] { accent-color: var(--wd-primary); flex: none; margin: 2px 0 0; }
+.wd-shell .export-row-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.wd-shell .export-row-name {
+  font-size: 12px; line-height: 17px; font-weight: 600; color: var(--wd-text);
+  overflow-wrap: anywhere;
+}
+.wd-shell .export-row-meta {
+  font-size: 10.5px; line-height: 15px;
+  color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums;
+}
 .wd-shell .checkbox-row {
   display: flex; align-items: center; gap: 10px;
   padding: 9px 11px; border-radius: 8px; cursor: pointer;

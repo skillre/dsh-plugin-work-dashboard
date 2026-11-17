@@ -26,6 +26,7 @@ import {
   scanGaps,
   text,
 } from './gap.js'
+import { buildBlockerBoard } from './blockers.js'
 import type { RepoCache } from './repo.js'
 import { RepoError } from './repo.js'
 import type {
@@ -122,6 +123,7 @@ export class PocStore {
         stats: emptyStats(),
         gaps: [],
         analysis: emptyAnalysis(),
+        blockers: buildBlockerBoard([], { now: this.options.now(), stallDays: this.options.stallDays }),
         warnings: [],
       }
     }
@@ -143,6 +145,7 @@ export class PocStore {
       stats: computeStats(sorted),
       gaps,
       analysis: analyse(sorted, gaps),
+      blockers: buildBlockerBoard(records, { now, stallDays: this.options.stallDays }),
       warnings,
     }
   }
@@ -329,6 +332,12 @@ function summarize(record: PocRecord, now: Date, stallDays: number): ProjectSumm
     daysSinceProgress: daysSince(activity, now),
     outcomeAchievement: text((record.outcome ?? {}).achievement),
     outcomeRecognition: text((record.outcome ?? {}).customer_recognition),
+    // Read from the NEWEST progress entry, not from `outcome`: the outcome block
+    // is written later by hand, and "waiting on the customer" is a statement
+    // about the last round that actually happened.
+    lastRecognition: last === null
+      ? ''
+      : text((last.customer as Record<string, unknown> | null | undefined)?.recognition),
   }
 }
 
@@ -340,7 +349,6 @@ function summarize(record: PocRecord, now: Date, stallDays: number): ProjectSumm
  */
 function computeStats(projects: ProjectSummary[]): Stats {
   let amountTotalWan = 0
-  let awaitingCustomer = 0
   for (const project of projects) {
     amountTotalWan += project.amountWan
   }
@@ -350,7 +358,10 @@ function computeStats(projects: ProjectSummary[]): Stats {
     inProgress: projects.filter((project) => project.status === '进行中').length,
     amountTotalWan,
     g0Complete: projects.filter((project) => project.g0Complete).length,
-    awaitingCustomer,
+    // "Awaiting customer" = the newest progress entry says the customer has not
+    // signed off yet. It used to be a `let` that was never incremented, so the
+    // counter was hard-wired to 0 while the KPI strip displayed it.
+    awaitingCustomer: projects.filter((project) => project.lastRecognition === '待确认' || project.lastRecognition === '部分认可').length,
     succeeded: projects.filter(
       (project) => project.outcomeAchievement === '达成' && project.outcomeRecognition === '认可',
     ).length,

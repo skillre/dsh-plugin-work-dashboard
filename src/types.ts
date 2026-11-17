@@ -288,6 +288,15 @@ export interface ProjectSummary {
   outcomeAchievement: string
   /** Raw `outcome.customer_recognition`; `''` when unset. */
   outcomeRecognition: string
+  /**
+   * The newest progress entry's `customer.recognition`, or `''`.
+   *
+   * Distinct from {@link outcomeRecognition}: `outcome` is often filled in later
+   * by hand, while this is what the customer said in the last recorded round.
+   * "Waiting on the customer" is a statement about the newest round, so the
+   * counter reads this one.
+   */
+  lastRecognition: string
 }
 
 /** One gap finding, addressed to a project and a rule. */
@@ -432,6 +441,14 @@ export interface Snapshot {
   gaps: GapItem[]
   /** Aggregated portfolio view; empty buckets when there are no projects. */
   analysis: PortfolioAnalysis
+  /**
+   * Every reason a project is stuck, merged from the five sources.
+   *
+   * Shipped WITH the snapshot rather than behind its own endpoint: the board is
+   * derived from the same records the list shows, so two requests could
+   * disagree after a refresh, and the Client already holds the whole snapshot.
+   */
+  blockers: BlockerBoard
   /** Non-fatal findings: unreadable files, unparsable YAML, duplicates. */
   warnings: string[]
 }
@@ -541,6 +558,86 @@ export type PocRequest =
   | { action: 'detail'; pocId: string }
   | { action: 'risks' }
   | { action: 'timeline' }
+  | { action: 'export-form'; mode: 'fill' | 'blank'; pocIds: string[] }
+
+/**
+ * One generated collection form, ready for the browser to save.
+ *
+ * The HTML is generated on the Host rather than in the Client because the
+ * generator needs the YAML serializer, and bundling `yaml` into the browser
+ * module would add ~100 KiB to a page that never otherwise parses YAML.
+ */
+export interface ExportFormResult {
+  /** The whole self-contained document. */
+  html: string
+  /** The suggested download name. */
+  fileName: string
+  /** How many projects the form covers; `0` for a blank form. */
+  projectCount: number
+}
+
+/**
+ * Where a blocker comes from.
+ *
+ * The five sources are one user-facing idea — "where is this stuck" — but they
+ * are NOT the same kind of finding: a gap is a judgement about the ledger's
+ * content, while a missing amount is a data-completeness issue. Keeping the
+ * source on the row is what lets the UI filter and explain them without the
+ * reader having to know which subsystem produced them.
+ */
+export const BLOCKER_SOURCES = Object.freeze([
+  'gap',
+  'stalled',
+  'missing-amount',
+  'no-progress',
+  'no-stage-since',
+] as const)
+export type BlockerSource = (typeof BLOCKER_SOURCES)[number]
+
+/** One blocker row: a project, a reason, and a source. */
+export interface BlockerRow {
+  /** Which subsystem found it. */
+  source: BlockerSource
+  /** `high` blocks progress, `medium` is a warning. */
+  level: GapLevel
+  /** Sort weight: higher is more urgent. */
+  priority: number
+  pocId: string
+  pocName: string
+  /** The state the project is in, for context: `G0-立项`, `closed`, or `''`. */
+  stageLabel: string
+  /**
+   * The gap rule that produced this row, when `source === 'gap'`.
+   *
+   * `null` for the four non-gap sources: they are not rules, and pretending
+   * they are would make the rule-numbered badge lie.
+   */
+  rule: GapRule | null
+  /** Rule number, or `0` for a non-gap source. */
+  ruleNo: number
+  /** Rule-specific values the Client interpolates into its copy. */
+  params: Record<string, number | string>
+}
+
+/** The unified blocker list plus its per-source counts. */
+export interface BlockerBoard {
+  /** Every blocker, most urgent first. */
+  rows: BlockerRow[]
+  /** Per-source totals, so the UI can offer a count per filter chip. */
+  counts: Record<BlockerSource, number>
+  /** Projects carrying at least one blocker. */
+  projectsBlocked: number
+  /** Projects scanned, so the board can say "3 of 30". */
+  projectsTotal: number
+}
+
+/** The five G0 prerequisites, as the worklist names them. */
+export interface Gate0WorkItem {
+  /** The YAML field name. */
+  field: string
+  /** `true` when the field carries content. */
+  present: boolean
+}
 
 
 

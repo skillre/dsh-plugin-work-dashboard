@@ -14,7 +14,7 @@
 
 import { z } from 'zod'
 import { RepoError } from './repo.js'
-import type { GlobalTimeline, PocRequest, ProjectDetail, RefreshOutcome, RiskBoard, Snapshot } from './types.js'
+import type { ExportFormResult, GlobalTimeline, PocRequest, ProjectDetail, RefreshOutcome, RiskBoard, Snapshot } from './types.js'
 import { ENDPOINT } from './types.js'
 
 /** Path of the exact route, under the shared `/api` channel. */
@@ -45,6 +45,12 @@ export interface ConsoleActions {
   risks(): Promise<RiskBoard>
   /** Every project's rounds, newest first. */
   timeline(): Promise<GlobalTimeline>
+  /**
+   * Build the collection form for one batch.
+   *
+   * `blank` ignores `pocIds` and returns the new-project form.
+   */
+  exportForm(mode: 'fill' | 'blank', pocIds: readonly string[]): Promise<ExportFormResult>
 }
 
 const envelopeSchema = z.object({
@@ -64,6 +70,14 @@ const requestSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('detail'), pocId: pocIdSchema }).strict(),
   z.object({ action: z.literal('risks') }).strict(),
   z.object({ action: z.literal('timeline') }).strict(),
+  z.object({
+    action: z.literal('export-form'),
+    mode: z.union([z.literal('fill'), z.literal('blank')]),
+    // Bounded: a form is meant for a batch a colleague will actually fill in,
+    // and an unbounded list would let one request build a thousands-project
+    // document on the Host.
+    pocIds: z.array(pocIdSchema).max(200),
+  }).strict(),
 ])
 
 /** A JSON response with no-store caching; the board is always live state. */
@@ -106,6 +120,8 @@ async function dispatch(actions: ConsoleActions, request: PocRequest, signal: Ab
       return actions.risks()
     case 'timeline':
       return actions.timeline()
+    case 'export-form':
+      return actions.exportForm(request.mode, request.pocIds)
   }
 }
 

@@ -24,10 +24,13 @@
  * trustworthy.
  */
 
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DimensionKey, Gate0CheckItem, ProgressView, ProjectDetail } from '../types.js'
 import { DIMENSIONS, STAGES } from '../types.js'
 import { InlineMeter } from './charts.jsx'
+import { Worklist } from './blockers.jsx'
+import { formatDate, formatWan } from './format.js'
 import { format, type Translate } from './text.js'
 import type { DetailProps } from './view-contract.js'
 
@@ -66,23 +69,6 @@ const G0_LABEL: Record<string, string> = {
 /** The two G0 fields that carry narrative prose rather than a short answer. */
 const G0_PROSE = new Set(['why_customer', 'why_us'])
 
-/** Format 万元 with thousands separators. */
-function formatWan(value: number): string {
-  const rounded = Math.round(value * 10) / 10
-  return rounded.toLocaleString('zh-CN', { maximumFractionDigits: 1 })
-}
-
-/** A `YYYY-MM-DD` date for the active locale. */
-function formatDate(value: string | null, locale: string): string {
-  if (value === null || value === '') return ''
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
-  const stamp = new Date(`${value}T00:00:00`)
-  if (Number.isNaN(stamp.getTime())) return value
-  return stamp.toLocaleDateString(locale.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  })
-}
-
 /** The tone a recognition value earns. */
 function recognitionTone(value: string): 'green' | 'amber' | 'red' | 'slate' {
   if (value === '认可') return 'green'
@@ -106,6 +92,97 @@ function completionRatio(value: string): number | null {
   const parsed = Number(match[1])
   if (!Number.isFinite(parsed)) return null
   return Math.min(1, Math.max(0, parsed / 100))
+}
+
+/**
+ * The five section keys, and the order each gate puts them in.
+ *
+ * The order encodes one claim per gate: at G0 the reader's job is to justify the
+ * project, so the G0 meter leads and the plan/progress follow. At G3 the job is
+ * to prove a result, so the stream and the evidence lead. Anything not listed as
+ * primary falls into the collapsed fold — never removed.
+ */
+type SectionKey = 'basic' | 'progress' | 'dimensions' | 'gate0' | 'plan' | 'outcome'
+
+/** `G0`..`G4` plus the two sentinels; the key set the skeleton table uses. */
+type SkeletonKey = 'G0' | 'G1' | 'G2' | 'G3' | 'G4' | 'closed' | 'unknown'
+
+interface Skeleton {
+  /** The sections shown in this order before the fold. */
+  sections: SectionKey[]
+  /** The dictionary keys for this gate's own explanation block. */
+  title: string
+  copy: string
+  next: string
+}
+
+/**
+ * Which sections lead at each gate.
+ *
+ * `unknown` deliberately keeps the historical full order: a ledger value the
+ * parser cannot place is not evidence about where the project is, so the page
+ * must not pretend to know which gate the reader is in.
+ */
+const SKELETON_FOR: Record<SkeletonKey, Skeleton> = {
+  G0: { sections: ['basic', 'gate0', 'plan'], title: 'dtStageG0Title', copy: 'dtStageG0Copy', next: 'dtStageG0Next' },
+  G1: { sections: ['basic', 'plan', 'progress'], title: 'dtStageG1Title', copy: 'dtStageG1Copy', next: 'dtStageG1Next' },
+  G2: { sections: ['basic', 'plan', 'progress'], title: 'dtStageG2Title', copy: 'dtStageG2Copy', next: 'dtStageG2Next' },
+  G3: { sections: ['progress', 'dimensions', 'basic'], title: 'dtStageG3Title', copy: 'dtStageG3Copy', next: 'dtStageG3Next' },
+  G4: { sections: ['dimensions', 'outcome', 'basic'], title: 'dtStageG4Title', copy: 'dtStageG4Copy', next: 'dtStageG4Next' },
+  closed: { sections: ['outcome', 'dimensions', 'basic'], title: 'dtStageClosedTitle', copy: 'dtStageClosedCopy', next: 'dtStageG4Next' },
+  unknown: {
+    sections: ['basic', 'progress', 'dimensions', 'gate0', 'plan', 'outcome'],
+    title: 'dtStageUnknownTitle',
+    copy: 'dtStageUnknownCopy',
+    next: 'dtStageUnknownCopy',
+  },
+}
+
+/**
+ * Whether the current gate's own evidence is recorded.
+ *
+ * This is the honest version of "how far along is it": it reads the per-gate
+ * `stageDone` flags the Host derives from each gate's own field, not the stage
+ * position. A project sitting at G2 with a G0 that was never signed off reads as
+ * "still pending", which is the finding, not a cosmetic detail.
+ */
+function stageStateOf(detail: ProjectDetail): { done: boolean; pending: boolean } {
+  const stage = detail.summary.stage
+  if (detail.summary.closed) return { done: true, pending: false }
+  if (stage === null) return { done: false, pending: true }
+  const index = STAGES.indexOf(stage)
+  if (index === -1) return { done: false, pending: true }
+  const done = detail.summary.stageDone[index] === true
+  return { done, pending: !done }
+}
+
+/**
+ * The block that says "you are here, and this is what it takes to leave".
+ *
+ * Without it the stage-aware order is invisible: the reader sees a different
+ * first section and has no statement of why. With it, the page can also say the
+ * honest negative — "this stage is not recorded as done" — which the five gates
+ * elsewhere only imply.
+ */
+function StageContext({ stage, done, pending, t }: {
+  stage: string | null
+  done: boolean
+  pending: boolean
+  t: Translate
+}): JSX.Element {
+  const key = (stage ?? 'unknown') as SkeletonKey
+  const skeleton = SKELETON_FOR[key] ?? SKELETON_FOR.unknown
+  return (
+    <section className="dt-stage-context" data-done={done} aria-label={t('dtStageSkeleton')}>
+      <div className="dt-stage-context-head">
+        <h2 className="dt-stage-context-title">{t(skeleton.title)}</h2>
+        <span className="dt-stage-context-kicker">{t('dtStageSkeleton')}</span>
+      </div>
+      <p className="dt-stage-context-copy">{t(skeleton.copy)}</p>
+      <p className="dt-stage-context-next">{t(skeleton.next)}</p>
+      <span className="dt-stage-context-state">{pending ? t('dtStagePending') : t('dtStageDone')}</span>
+    </section>
+  )
 }
 
 /** A section frame: heading, optional kicker, and a body. */
@@ -244,6 +321,10 @@ function IdentityRail({ props }: { props: DetailProps }): JSX.Element {
       <div className="dt-rail-block">
         <h2 className="dt-rail-block-title">{t('sectionIdentity')}</h2>
         <div className="dt-rail-meta">
+          {/* The customer's own name was being sent by the Host and never
+              rendered: the page said "POC-2026-003" but never "人保财险". */}
+          <RailMeta label={t('dtCustomerCompany')} value={orgText(detail.org.company)} t={t} />
+          <RailMeta label={t('dtCustomerSystem')} value={orgText(detail.org.system)} t={t} />
           <RailMeta label={t('dtOwnerLabel')} value={summary.owner} t={t} />
           <RailMeta label={t('dtTechOwnerLabel')} value={summary.techOwner} t={t} />
           <RailMeta label={t('dtSalesLabel')} value={detail.sales} t={t} />
@@ -473,6 +554,70 @@ function Gate0Meter({ detail, t }: { detail: ProjectDetail; t: Translate }): JSX
   )
 }
 
+/**
+ * A `OrgRecord` field as a display string.
+ *
+ * `OrgRecord` is the raw wire shape, so every field is optional and nullable.
+ * The detail page only ever needs "text or blank", and doing that coercion at
+ * each call site is how a `null` reaches a React child and renders nothing.
+ */
+function orgText(value: string | null | undefined): string {
+  return value === null || value === undefined ? '' : value
+}
+
+/**
+ * Basic information: who the customer is, and how a decision gets made.
+ *
+ * The detail page used to spread these across three places — the customer's own
+ * name was not shown at all, the decision chain sat as one of five G0 meter
+ * cells, and the post-POC decision sat beside it. They belong together: "who is
+ * this, and who signs off" is one question, and it is the first one a reader new
+ * to the project asks.
+ *
+ * The two decision fields are shown even when empty, with an explicit "not
+ * written down" line rather than a blank: an empty decision chain is the finding
+ * the whole G0 gate exists to surface, so hiding it would be the one omission
+ * this section must not make.
+ */
+function BasicInfo({ detail, t }: { detail: ProjectDetail; t: Translate }): JSX.Element {
+  const summary = detail.summary
+  const rows: Array<{ key: string; label: string; value: string }> = [
+    { key: 'company', label: t('dtCustomerCompany'), value: orgText(detail.org.company) },
+    { key: 'system', label: t('dtCustomerSystem'), value: orgText(detail.org.system) },
+    { key: 'department', label: t('dtCustomerDepartment'), value: orgText(detail.org.department) },
+    { key: 'owner', label: t('dtOwnerLabel'), value: summary.owner },
+    { key: 'tech', label: t('dtCustomerTech'), value: summary.techOwner },
+    { key: 'sales', label: t('dtSalesLabel'), value: detail.sales },
+    { key: 'sponsor', label: t('dtCustomerSponsor'), value: detail.execSponsor },
+    { key: 'amount', label: t('dtAmountLabel'), value: summary.amountWan === 0 ? '' : `${formatWan(summary.amountWan)} ${t('statAmountUnit')}` },
+  ]
+  return (
+    <Section title={t('dtBasicTitle')}>
+      <dl className="dt-basic-grid">
+        {rows.map((row) => (
+          <div key={row.key} className="dt-basic-row" data-empty={row.value === ''}>
+            <dt className="dt-basic-label">{row.label}</dt>
+            <dd className="dt-basic-value">{row.value === '' ? t('dtUnset') : row.value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <div className="dt-basic-decisions">
+        <Prose
+          label={t('dtBasicDecisionChain')}
+          value={detail.gate0.decisionChain === '' ? t('dtBasicDecisionChainNone') : detail.gate0.decisionChain}
+          t={t}
+        />
+        <Prose
+          label={t('dtBasicPostPoc')}
+          value={detail.gate0.postPocDecision === '' ? t('dtBasicPostPocNone') : detail.gate0.postPocDecision}
+          t={t}
+        />
+      </div>
+    </Section>
+  )
+}
+
 /** The plan: criteria table, numbered scenarios, risks with severity, prose meta. */
 function PlanPanels({ detail, t }: { detail: ProjectDetail; t: Translate }): JSX.Element {
   const plan = detail.plan
@@ -619,18 +764,77 @@ function OutcomePanel({ detail, t }: { detail: ProjectDetail; t: Translate }): J
   )
 }
 
-/** The detail page: the rail on the left, the reading pane on the right. */
+/**
+ * The detail page: the rail on the left, a stage-aware pane on the right.
+ *
+ * The pane is NOT a fixed five-section stack any more. On a ledger where every
+ * project sits at G0 with no progress, the old fixed order opened on three empty
+ * sections and buried the one thing the reader could act on — the G0 fields they
+ * still had to fill in. The order now follows the gate the project is actually
+ * in, so the first screen is the work that gate implies.
+ *
+ * Two invariants keep this from becoming a trap:
+ *
+ * 1. **Nothing is hidden.** Sections the current stage deprioritizes move into a
+ *    collapsed "other sections" fold, not out of the page. A reader checking last
+ *    stage's evidence can always open it.
+ * 2. **Unknown stages degrade, they do not break.** A stage the ledger cannot
+ *    parse keeps the historical full order rather than guessing.
+ */
 export function DetailPage(props: DetailProps): JSX.Element {
   const { detail, t, locale } = props
+  const stage = detail.summary.closed ? 'closed' : detail.summary.stage
+  const skeleton = SKELETON_FOR[stage as SkeletonKey] ?? SKELETON_FOR.unknown
+  const [foldOpen, setFoldOpen] = useState(false)
+
+  /** One named section, so the skeleton can order them by key. */
+  const sections: Record<SectionKey, JSX.Element> = {
+    basic: <BasicInfo key="basic" detail={detail} t={t} />,
+    progress: <ProgressStream key="progress" detail={detail} t={t} locale={locale} />,
+    dimensions: <DimensionGrid key="dimensions" detail={detail} t={t} />,
+    gate0: <Gate0Meter key="gate0" detail={detail} t={t} />,
+    plan: <PlanPanels key="plan" detail={detail} t={t} />,
+    outcome: <OutcomePanel key="outcome" detail={detail} t={t} />,
+  }
+
+  const primary = skeleton.sections
+  const secondary = (['basic', 'progress', 'dimensions', 'gate0', 'plan', 'outcome'] as SectionKey[])
+    .filter((key) => !primary.includes(key))
+
+  const stageState = stageStateOf(detail)
+  // The worklist reads the same blocker rows the portfolio panel does, narrowed
+  // to this project, so the two can never disagree about what is missing.
+  const projectBlockers = props.blockers ?? []
+
   return (
     <div className="dt-page">
       <IdentityRail props={props} />
       <main className="dt-pane">
-        <ProgressStream detail={detail} t={t} locale={locale} />
-        <DimensionGrid detail={detail} t={t} />
-        <Gate0Meter detail={detail} t={t} />
-        <PlanPanels detail={detail} t={t} />
-        <OutcomePanel detail={detail} t={t} />
+        <StageContext stage={stage} done={stageState.done} pending={stageState.pending} t={t} />
+        {/* The worklist sits ABOVE the sections: on a ledger where most
+            projects are untouched, "what do I fill in" is the reason the page
+            was opened, and a list of empty sections answers it poorly. */}
+        <section className="dt-worklist" aria-label={t('worklistTitle')}>
+          <Worklist detail={detail} rows={projectBlockers} t={t} />
+        </section>
+        {primary.map((key) => sections[key])}
+        {secondary.length === 0 ? null : (
+          <section className="dt-fold" data-open={foldOpen}>
+            <button
+              type="button"
+              className="dt-fold-head"
+              aria-expanded={foldOpen}
+              onClick={() => setFoldOpen((value) => !value)}
+            >
+              <h2 className="dt-fold-title">{t('dtOtherSections')}</h2>
+              <span className="dt-fold-hint">{t('dtOtherSectionsHint')}</span>
+              <span className="dt-fold-arrow" aria-hidden="true">{foldOpen ? '▴' : '▾'}</span>
+            </button>
+            <div className="dt-fold-body">
+              {secondary.map((key) => sections[key])}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   )

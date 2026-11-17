@@ -14,12 +14,14 @@
  */
 
 import { BASE_CSS } from './css/base.js'
+import { BLOCKERS_CSS } from './css/blockers.js'
 import { CHARTS_CSS } from './css/charts.js'
 import { DETAIL_CSS } from './css/detail.js'
 import { INSIGHTS_CSS } from './css/insights.js'
 import { OVERVIEW_CSS } from './css/overview.js'
+import { SUMMARY_CSS } from './css/summary.js'
 
-export const CONSOLE_CSS = [BASE_CSS, CHARTS_CSS, OVERVIEW_CSS, DETAIL_CSS, INSIGHTS_CSS].join('\n')
+export const CONSOLE_CSS = [BASE_CSS, CHARTS_CSS, OVERVIEW_CSS, SUMMARY_CSS, DETAIL_CSS, INSIGHTS_CSS, BLOCKERS_CSS].join('\n')
 
 /** The scoped root class, re-exported for tests that assert the scope. */
 export const ROOT_CLASS = 'wd-shell'
