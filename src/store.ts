@@ -372,7 +372,8 @@ function computeStats(projects: ProjectSummary[]): Stats {
 }
 
 /** Empty counters for the "no data yet" snapshot. */
-function emptyStats(): Stats {  return {
+function emptyStats(): Stats {
+  return {
     total: 0,
     g0Passed: 0,
     inProgress: 0,
