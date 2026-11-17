@@ -1,5 +1,8 @@
 # 工作看板 0.7–0.9 · 实施计划
 
+> **状态：已实施（0.9.0）**。本文件保留原始计划，便于对照「计划了什么 / 实际做了什么」。
+> 实测结果、验证证据与偏差见文末「实施记录」。
+
 > 本文件是 P0–P3 优化的落地计划，不是设计愿景。每条都写清了**改哪个文件、验收什么、为什么不先做别的**。
 > 目标来自一次对真实台账（`skillre/workbranch` @ `7b81b63`，30 个项目）的实测：progress 0 条、plan 全空、
 > outcome 全空、四维覆盖 0/30。插件最精细的四块（进展流、四维、时间线、风险看板）在真实数据上**全是空态**。
@@ -168,3 +171,60 @@
 - 不改数据源 schema（`schemas/poc-schema.md` 是台账仓的事）
 - 不在用户 profile 里安装/更新（安装权属于用户）
 - 不做写回与 PR 提交（1.0 单独设计）
+
+---
+
+## 实施记录（0.9.0）
+
+### 实际落地
+
+| 计划项 | 状态 | 落点 |
+|---|---|---|
+| P0-3 阻障口径统一 | ✅ | `src/blockers.ts` + `snapshot.blockers` + `BlockersPanel` |
+| P0-1 阶段感知详情页 | ✅ | `SKELETON_FOR` 骨架表 + `StageContext` + `dt-fold` 折叠 |
+| P0-2 空态改工作清单 | ✅ | `Worklist` 组件（点名缺失字段） |
+| P1-1 KPI 顶条 | ✅ | `KpiStrip`（5 格 + 阶段 chip） |
+| P1-2 预算面板 | ✅ | `BudgetPanel`（三桶 + 体系分布 + 未填警告） |
+| P1-3 阶段内完成度 | ✅ | `StageProgressFigure` |
+| P1-4 基本信息补全 | ✅ | `BasicInfo`（客户名此前从未渲染） |
+| P2 导出收集表单 | ✅ | `src/form.ts` + `export-form` RPC + `ExportFormDialog` |
+| P3 工程债 | ✅ | 见下 |
+
+### 偏差与说明
+
+1. **P0-3 改成随快照下发**。原计划是独立端点 `blockers`。实施时改成 `Snapshot.blockers`：
+   阻障和列表来自同一批记录，两次请求在刷新后可能不一致，而 Client 本来就持有整份快照。
+2. **骨架顺序多了 `basic`**。原计划只重排五个既有区块；实施时发现「客户名」这个字段
+   Host 一直下发、Client 从未渲染，于是新增基本信息区块并让它多数阶段排第一。
+3. **导出表单在 Host 生成**，不在浏览器。生成器需要 `yaml`，把它打进 client bundle 会给
+   一个从不解析 YAML 的页面增加约 100 KiB。
+4. **删除了 `src/form.v1-deferred.ts`（912 行）**，而不是保留。v3 表单已就位，留一份
+   模型着已删字段的旧文件只会让后来者误用它。
+
+### 验证证据
+
+| 级别 | 证据 | 覆盖 |
+|---|---|---|
+| 静态 | `npm run typecheck`、`npm run pack:check`、`node scripts/preview.mjs check` | 类型、发布清单、显示契约 |
+| 单元/组件 | `npm test` — 251 项 | 规则、聚合、表单 YAML 往返、jsdom 渲染 |
+| 真实台账 | `node scripts/render-check.mjs`、`node scripts/export-check.mjs` | 30 个项目上阻障/工作清单/表单生成 |
+| 真实挂载 | `docs/evidence/isolated-mount-0.9.0.json` | 隔离 profile、打包 tarball、API、缓存生命周期、清理 |
+| 真实浏览器 | `docs/evidence/ui-verification-0.9.0.json` + 3 张截图 | 页面挂载、五个新面板、阶段骨架、导出对话框 |
+
+### 真实浏览器验证抓到的缺陷
+
+**对话框渲染在 `.wd-shell` 之外**（已修复，`37616d9`）。本插件所有样式限定在 `.wd-shell`
+下，两个对话框却是它的兄弟节点，于是 `position: fixed` 根本不生效（实测 computed position
+为 `static`），覆盖层退化成文档流里的普通块、被排到页面末尾。
+
+jsdom 看不见布局，所以 64 项组件测试全绿也测不出来——这正是「真实 UI 验证不能由静态测试
+替代」的具体例子。修复后补了回归测试：对话框必须渲染在 `.wd-shell` 作用域内。
+
+### 未完成 / 已知限制
+
+- **1.0.0 范围（新建/编辑 + PR 提交）未做**：需要 Host 写能力与 draft PR 路径，与只读看板定位不同。
+- **UI 证据来自 Chrome for Testing（headless）**，不是 Electron Desktop Client。Desktop 交付前
+  仍需在真实 Electron 客户端复验一次。
+- `docs/PREVIEW.md` 的画板行仍未填（`preview.mjs check` 的既有 warning），与本次改动无关。
+- 真实台账的 30 个项目**全部停在 G0、零进展**，所以 G3/G4 骨架、进展流、时间线在真实数据上
+  仍只由测试夹具覆盖，没有生产数据佐证。
