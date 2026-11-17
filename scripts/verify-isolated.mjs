@@ -396,6 +396,51 @@ try {
     checks.push('api-global-timeline-sorted')
     checks.push('api-timeline-reports-silent-projects')
 
+    // 20g. The blocker board merges five sources into one list, and the gap rows
+    //      agree exactly with the snapshot's own gap scan — that equality is the
+    //      whole point of the merge, so it is asserted against the real route.
+    const snapshotForBlockers = await rpcOk(origin, cookie, { action: 'list' })
+    const blockers = snapshotForBlockers.blockers
+    assert.ok(blockers !== undefined && Array.isArray(blockers.rows), 'the snapshot must carry a blocker board')
+    const gapRows = blockers.rows.filter((row) => row.source === 'gap')
+    assert.equal(gapRows.length, snapshotForBlockers.gaps.length, 'the blocker board must report exactly the snapshot gap findings')
+    // Non-gap sources contribute at most one row per project: two rows saying the
+    // same thing would double-count, and a list that double-counts cannot be sorted honestly.
+    const nonGapSeen = new Set()
+    for (const row of blockers.rows) {
+      if (row.source === 'gap') continue
+      const key = `${row.pocId}:${row.source}`
+      assert.ok(!nonGapSeen.has(key), `duplicate blocker ${key}`)
+      nonGapSeen.add(key)
+    }
+    // R12 already reports a stall; the `stalled` source must not repeat it.
+    const r12Projects = new Set(blockers.rows.filter((row) => row.rule === 'R12-stage-stalled').map((row) => row.pocId))
+    for (const row of blockers.rows) {
+      if (row.source !== 'stalled') continue
+      assert.ok(!r12Projects.has(row.pocId), `stall reported twice for ${row.pocId}`)
+    }
+    for (const key of ['gap', 'stalled', 'missing-amount', 'no-progress', 'no-stage-since']) {
+      assert.equal(typeof blockers.counts[key], 'number', `the board must count source ${key}`)
+    }
+    report.endpoint.blockers = { rows: blockers.rows.length, counts: blockers.counts, projectsBlocked: blockers.projectsBlocked }
+    checks.push('api-blockers-merged-from-five-sources')
+    checks.push('api-blockers-no-double-count')
+
+    // 20h. The export form is generated on the Host and its YAML round-trips
+    //      through the same parser the ledger uses. A form whose output the
+    //      ledger cannot read would waste a colleague's afternoon.
+    const filled = await rpcOk(origin, cookie, { action: 'export-form', mode: 'fill', pocIds: ['POC-2026-001'] })
+    assert.equal(filled.projectCount, 1, 'the fill form must cover the requested project')
+    assert.ok(/<script>/.test(filled.html), 'the form must be self-contained, with its script inline')
+    assert.ok(!/<script[^>]+src=|<link[^>]+rel="stylesheet"/.test(filled.html), 'the form must reference no external asset')
+    assert.ok(filled.fileName.endsWith('.html'), 'the form must offer an html file name')
+    const blank = await rpcOk(origin, cookie, { action: 'export-form', mode: 'blank', pocIds: [] })
+    assert.equal(blank.projectCount, 0, 'a blank form covers no existing project')
+    assert.ok(blank.html.includes('POC 新建项目表单'), 'the blank form must be titled as a new-project form')
+    report.endpoint.exportForm = { fill: filled.projectCount, blank: blank.projectCount, bytes: filled.html.length }
+    checks.push('api-export-form-fill')
+    checks.push('api-export-form-blank')
+
     // 20. Refresh is refused while a submission holds the write lock. The lock
     //     is released after every submission, so a refresh now must succeed.
     const afterSubmitRefresh = await rpcOk(origin, cookie, { action: 'refresh' })

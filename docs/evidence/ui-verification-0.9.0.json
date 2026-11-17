@@ -1,0 +1,31 @@
+{
+  "version": "0.9.0",
+  "verifiedAt": "2026-11-17T10:55:20.842Z",
+  "browser": "Chrome for Testing 147.0.7727.15 (headless, CDP)",
+  "checks": [
+    "web-ui-mounts",
+    "web-ui-reset-to-overview",
+    "web-ui-refresh-pressed",
+    "web-ui-projects-rendered",
+    "web-ui-kpi-strip",
+    "web-ui-budget-panel",
+    "web-ui-stage-progress",
+    "web-ui-blocker-panel",
+    "web-ui-blocker-projects-note",
+    "web-ui-blocker-source-filter",
+    "web-ui-overview-screenshot",
+    "web-ui-open-detail",
+    "web-ui-detail-stage-context",
+    "web-ui-detail-basic-info",
+    "web-ui-detail-worklist",
+    "web-ui-detail-fold",
+    "web-ui-detail-first-section",
+    "web-ui-detail-screenshot",
+    "web-ui-returns-to-overview",
+    "web-ui-export-open",
+    "web-ui-export-preselects",
+    "web-ui-export-screenshot",
+    "web-ui-no-console-errors"
+  ],
+  "failures": []
+}

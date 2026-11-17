@@ -703,6 +703,24 @@ describe('export form', () => {
     HTMLAnchorElement.prototype.click = vi.fn()
   })
 
+  it('renders both dialogs inside the styled shell scope', async () => {
+    // Every rule in this plugin is scoped under `.wd-shell`. A dialog rendered as
+    // a SIBLING of the shell therefore picks up none of them: `position: fixed`
+    // never applies and the overlay lays out in the page flow at the bottom of
+    // the document. jsdom cannot see the layout, but it can see the ancestor —
+    // which is precisely the bug the real-browser check found.
+    await renderPage(makeApi())
+    fireEvent.click(screen.getByRole('button', { name: '导出表单' }))
+    const dialog = document.querySelector('.modal-overlay') as HTMLElement
+    expect(dialog).toBeTruthy()
+    expect(dialog.closest('.wd-shell')).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /取消/ }))
+    fireEvent.click(screen.getByRole('button', { name: '刷新设置' }))
+    const settings = document.querySelector('.modal-overlay') as HTMLElement
+    expect(settings.closest('.wd-shell')).not.toBeNull()
+  })
+
   it('opens from the header and preselects the visible projects', async () => {
     await renderPage(makeApi())
     fireEvent.click(screen.getByRole('button', { name: '导出表单' }))

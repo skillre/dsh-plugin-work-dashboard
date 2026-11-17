@@ -914,26 +914,30 @@ export function WorkDashboardPage({ api, locale, t }: WorkDashboardPageProps): J
             {overviewReady ? <><span className="spacer" /><span>{format(t('filterResult'), { shown: visibleProjects.length, total: snapshot.projects.length })}</span></> : null}
           </div>
         </div>
+        {/* Both dialogs live INSIDE .wd-shell on purpose: every rule in this
+            plugin is scoped under that class, so a sibling of the shell renders
+            as an unstyled block in the page flow instead of a centred overlay.
+            That is exactly the bug the real-browser check caught. */}
+        {settingsOpen ? (
+          <RefreshSettings
+            preference={preference}
+            t={t}
+            onSave={savePreference}
+            onCancel={() => setSettingsOpen(false)}
+          />
+        ) : null}
+        {exportOpen ? (
+          <ExportFormDialog
+            api={api}
+            // The selection defaults to what the filters show, which is what the
+            // reader means by "export these" — not the whole ledger.
+            projects={visibleProjects}
+            t={t}
+            onClose={() => setExportOpen(false)}
+            onError={(message) => setFailure(message)}
+          />
+        ) : null}
       </div>
-      {settingsOpen ? (
-        <RefreshSettings
-          preference={preference}
-          t={t}
-          onSave={savePreference}
-          onCancel={() => setSettingsOpen(false)}
-        />
-      ) : null}
-      {exportOpen ? (
-        <ExportFormDialog
-          api={api}
-          // The selection defaults to what the filters show, which is what the
-          // reader means by "export these" — not the whole ledger.
-          projects={visibleProjects}
-          t={t}
-          onClose={() => setExportOpen(false)}
-          onError={(message) => setFailure(message)}
-        />
-      ) : null}
     </>
   )
 }

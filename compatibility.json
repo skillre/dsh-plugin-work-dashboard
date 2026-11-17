@@ -137,6 +137,46 @@
         "skills/poc-export/scripts/export-form.mjs"
       ],
       "note": "Packed tarball 0.6.0 installed into an owned, disposable, non-Desktop web profile (DSH 0.2.2-rc.2). This release is a packaging and CI correction, not a feature change: the plugin behaviour verified in 0.5.0 is unchanged. scripts/preview.mjs and scripts/prepare-release.mjs now import the shared scripts/display-contract.mjs instead of each carrying a drifted local copy of the rules, and package.json#files gains the explicit \"!docs/PREVIEW.md\" exclusion. That closes a real leak: the published 0.5.0 tarball shipped docs/PREVIEW.md, the internal whiteboard registry holding Feishu document links and tokens, because the local reimplementation of npm file selection treated a directory entry in files as an allow-list rather than as contributing ignores. Coverage is now decided by a real npm pack probe, so the repository check, prepare-release and the fleet audit share one verdict and cannot disagree with npm. Two CI defects were also fixed, both of which were failing on main: the plugin.spec cache roots were built from TMPDIR, which runners set to /tmp and which is shallower than the three-segment floor the mount guard enforces (the guard is correct, the fixture was not), and tests/view.spec.tsx failed all 41 assertions on Node 26 because Node 26 defines its own globalThis.localStorage stub that shadows the jsdom Storage vitest would otherwise install. Both were reproduced and re-verified on real Node 26 (41/41 failing before the fix, 41/41 passing after). Published to the registry on 2026-11-13; the LIVE market entry now installs @skillre/dsh-plugin-work-dashboard@0.6.0 from npm into a fresh owned profile and 15 checks passed (composed row, bounded startup, list/detail/risks/timeline all answering), then the owned profile was removed and the removal verified. Verification for this release: npm run check passes (preview check, typecheck, 189 unit tests, lib-drift, pack check); 31 isolated checks passed against the packed tarball on a genuinely mounted DSH 0.2.2-rc.2, including that the three bundled skills reached the skill catalog at boot; cleanup removed the owned profile and its cache and the removal was verified. Desktop Client (Electron) visual verification was not performed for this release; the UI assertions recorded from 0.5.0 still describe the same shipped client bundle."
+    },
+    {
+      "dsh": "0.2.2-rc.3",
+      "verifiedAt": "2026-11-17",
+      "result": "passed",
+      "checks": [
+        "dsh-version",
+        "local-remote-and-gh-stub",
+        "profile-template-created",
+        "profile-tarball-install",
+        "packed-dependency-and-selection",
+        "dump-config",
+        "packed-payload-present",
+        "packed-skills-present",
+        "cache-absent-before-mount",
+        "bounded-startup",
+        "bundled-skills-registered",
+        "api-cold-cache-empty",
+        "api-refresh-clone",
+        "api-board-computed",
+        "api-portfolio-analysis",
+        "api-detail",
+        "api-refresh-fetch",
+        "api-unknown-project",
+        "api-auth-fence",
+        "cache-is-real-clone",
+        "cache-credential-not-persisted",
+        "api-risk-board-sorted",
+        "api-global-timeline-sorted",
+        "api-timeline-reports-silent-projects",
+        "api-blockers-merged-from-five-sources",
+        "api-blockers-no-double-count",
+        "api-export-form-fill",
+        "api-export-form-blank",
+        "refresh-works-after-submit",
+        "cache-wiped-on-restart",
+        "api-refresh-after-restart",
+        "cleanup-verified"
+      ],
+      "notes": "Isolated non-Desktop profile; packed tarball @skillre/dsh-plugin-work-dashboard@0.9.0 (sha256 58058de0aa4427a2...). Scope: Host mount, Connection route, cache lifecycle, risk board, global timeline, blocker aggregation, export-form generation, bundled skill registration, and owned-profile cleanup. NOT covered by this run: any Client UI check — no browser was driven, so the web-ui rows recorded under 0.2.2-rc.2 remain the only UI evidence and do not describe 0.9.0."
     }
   ],
   "observations": {

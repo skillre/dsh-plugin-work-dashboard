@@ -1,0 +1,133 @@
+{
+  "package": "@skillre/dsh-plugin-work-dashboard",
+  "version": "0.9.0",
+  "dsh": "0.2.2-rc.3",
+  "tarball": {
+    "path": "/Users/skillre/dsh-plugins/repos/dsh-plugin-work-dashboard/skillre-dsh-plugin-work-dashboard-0.9.0.tgz",
+    "sha256": "58058de0aa4427a2256202329889da1c0f943137bf9c300347832b52a3440db7"
+  },
+  "profile": "work-dashboard-test-1941c859",
+  "checks": [
+    "command: dsh --version -> exit 0",
+    "dsh-version",
+    "local-remote-and-gh-stub",
+    "command: dsh --profile work-dashboard-test-1941c859 --from-default-profile web --dump-config -> exit 0",
+    "profile-template-created",
+    "command: dsh plugin --profile work-dashboard-test-1941c859 add /Users/skillre/dsh-plugins/repos/dsh-plugin-work-dashboard/skillre-dsh-plugin-work-dashboard-0.9.0.tgz --ignore-scripts --store-dir /private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-work-dashboard-mount-LtVKrY/pnpm-store -> exit 0",
+    "profile-tarball-install",
+    "packed-dependency-and-selection",
+    "command: dsh --profile work-dashboard-test-1941c859 --patch /private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-work-dashboard-mount-LtVKrY/owned-cache.patch.yml --dump-config -> exit 0",
+    "dump-config",
+    "packed-payload-present",
+    "packed-skills-present",
+    "cache-absent-before-mount",
+    "bounded-startup",
+    "bundled-skills-registered",
+    "api-cold-cache-empty",
+    "api-refresh-clone",
+    "api-board-computed",
+    "api-portfolio-analysis",
+    "api-detail",
+    "api-refresh-fetch",
+    "api-unknown-project",
+    "api-auth-fence",
+    "cache-is-real-clone",
+    "cache-credential-not-persisted",
+    "api-risk-board-sorted",
+    "api-global-timeline-sorted",
+    "api-timeline-reports-silent-projects",
+    "api-blockers-merged-from-five-sources",
+    "api-blockers-no-double-count",
+    "api-export-form-fill",
+    "api-export-form-blank",
+    "refresh-works-after-submit",
+    "cache-wiped-on-restart",
+    "api-refresh-after-restart"
+  ],
+  "endpoint": {
+    "cold": {
+      "cacheReady": false,
+      "cachePath": "/private/var/folders/k5/plnkf7qs5992_9713c_b34nc0000gn/T/dsh-work-dashboard-mount-LtVKrY/home/cache/work-dashboard/repo"
+    },
+    "refresh1": {
+      "mode": "clone",
+      "projects": 5,
+      "durationMs": 560
+    },
+    "board": {
+      "stats": {
+        "total": 5,
+        "g0Passed": 4,
+        "inProgress": 4,
+        "amountTotalWan": 3100,
+        "g0Complete": 4,
+        "awaitingCustomer": 1,
+        "succeeded": 1,
+        "stopped": 1
+      },
+      "gaps": 13,
+      "firstRule": "R11-no-next-milestone"
+    },
+    "analysis": {
+      "stages": [
+        "G0:1",
+        "G1:1",
+        "G2:1",
+        "G3:0",
+        "G4:1",
+        "closed:1",
+        "unknown:0"
+      ],
+      "orgs": 5,
+      "topAmount": 1500
+    },
+    "detail": {
+      "progress": 2,
+      "achievement": "达成"
+    },
+    "risks": {
+      "rows": 6,
+      "counts": {
+        "high": 2,
+        "medium": 3,
+        "low": 1,
+        "unset": 0,
+        "total": 6
+      }
+    },
+    "timeline": {
+      "entries": 4,
+      "months": 4,
+      "silent": 2
+    },
+    "blockers": {
+      "rows": 17,
+      "counts": {
+        "gap": 13,
+        "stalled": 0,
+        "missing-amount": 1,
+        "no-progress": 2,
+        "no-stage-since": 1
+      },
+      "projectsBlocked": 5
+    },
+    "exportForm": {
+      "fill": 1,
+      "blank": 0,
+      "bytes": 34656
+    }
+  },
+  "cleanup": {
+    "profile": "work-dashboard-test-1941c859",
+    "processesStopped": true,
+    "rootRemoved": true,
+    "verified": true
+  },
+  "skills": {
+    "bundled": [
+      "poc-ledger",
+      "poc-export",
+      "poc-submit"
+    ]
+  }
+}
