@@ -14,12 +14,19 @@
  * as a warning and skipped: a single bad hand-edit must not blank the whole
  * board.
  */
+import type { RulesBundle } from './rules.js';
 import type { RepoCache } from './repo.js';
 import type { GapItem, OrgRecord, PocRecord, PortfolioAnalysis, ProjectDetail, ProjectSummary, Snapshot, StageId } from './types.js';
 /** Injected clock so the store stays testable and the rules stay pure. */
 export interface StoreOptions {
     now: () => Date;
-    /** Days in one stage after which rule 12 fires. */
+    /**
+     * Days in one stage after which rule 12 fires.
+     *
+     * Retained as an explicit override for tests and for the plugin config; when a
+     * rules bundle is available its `stallDays` wins, because the ledger owns the
+     * threshold and the plugin must not disagree with CI.
+     */
     stallDays: number;
 }
 /** The Host-side view model builder. */
@@ -32,6 +39,14 @@ export declare class PocStore {
         records: PocRecord[];
         warnings: string[];
     }>;
+    /**
+     * The rules in force, read from the ledger's `config/rules.yaml`.
+     *
+     * A missing file is reported through `RulesBundle.source === 'fallback'`, not
+     * thrown: an older cache must still render, it just must not pretend its
+     * thresholds are the ledger's.
+     */
+    rules(): Promise<RulesBundle>;
     /** The overview snapshot; never throws for a missing cache, it reports it. */
     snapshot(): Promise<Snapshot>;
     /** One project's full record; `null` when no file declares that id. */

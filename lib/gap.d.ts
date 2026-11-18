@@ -1,18 +1,28 @@
 /**
- * The twelve v3 gap rules, as pure functions.
+ * The sixteen v3.1 gap rules, as pure functions.
  *
- * The rules are hard-coded here on purpose: they are the product's judgement,
- * not repository data, so they must not drift with a script the data source
- * happens to ship. Every rule is a total function of `(record, options)` —
- * no clock, no filesystem, no locale — so `tests/gap.spec.ts` can pin each one
- * to a fixture.
+ * Every rule is a total function of `(record, options)` — no clock, no
+ * filesystem, no locale — so `tests/gap.spec.ts` can pin each one to a fixture.
+ *
+ * Thresholds are NOT hard-coded here. They arrive through
+ * {@link ScanOptions.rules}, parsed from the ledger's `config/rules.yaml`, because
+ * the ledger treats that file as the single source ("three copied rule lists
+ * drift; one does not"). A caller that omits `rules` gets the built-in fallback,
+ * which is the same set of numbers but is labelled as a fallback in the UI.
  *
  * The v3 model is **progress-centred**: a project is judged by its latest
  * progress entry, not by a separately-maintained `result` block. Rules 8–10
- * therefore read `progress[progress.length - 1]`, and rule 7 compares "has any
- * progress" against the G2 readiness flag.
+ * therefore read the newest entry, and rule 7 compares "has any progress"
+ * against the G2 readiness flag.
+ *
+ * Rules 13–16 are the v3.1 additions and read the ledger's **derived**
+ * per-scenario and per-criterion state (`scenarios[].status`,
+ * `criteria[].status`) rather than re-deriving it: the ledger's `derive.mjs` is
+ * the only writer of those fields, and a second implementation here would
+ * eventually disagree with CI.
  */
 import type { GapItem, GapLevel, PocRecord, StageId } from './types.js';
+import { type RulesBundle } from './rules.js';
 /** Normalize the free-form `stage` string onto a stage id. */
 export declare function normalizeStage(raw: unknown): {
     stage: StageId | null;
@@ -30,6 +40,14 @@ export interface ScanOptions {
     now: Date;
     /** Days in one stage after which rule 12 fires. */
     stallDays: number;
+    /**
+     * The thresholds and rule metadata in force.
+     *
+     * Omitted means "use the built-in fallback": the scan still runs, but the
+     * caller should surface that its findings came from fallback numbers, not from
+     * the ledger's `config/rules.yaml`.
+     */
+    rules?: RulesBundle;
 }
 /** Rule metadata: number, severity and sort weight. */
 export declare const RULE_META: Record<GapItem['rule'], {

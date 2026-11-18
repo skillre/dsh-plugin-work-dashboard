@@ -13,6 +13,22 @@
  * 3. **A refresh is exclusive.** One lock file keeps two console instances in
  *    the same DSH home from cloning into the same directory at once.
  *
+ * ## The ledger has three sources, not one
+ *
+ * As of schema 3.1 the repository publishes three distinct things, and they fail
+ * independently:
+ *
+ * - `projects/*.yaml` — the facts. Absence is an error: without it there is no
+ *   console at all.
+ * - `config/*.yaml` — the judgement (thresholds, rule metadata, staleness
+ *   limits). Absence is a **stale cache**, not a failure: the plugin falls back
+ *   to its built-in numbers and says so.
+ * - `signals/*.yaml` — the agent's conclusions. Absence is normal: most projects
+ *   have none, and a signal is an opinion rather than a fact.
+ *
+ * Treating all three the same would either refuse to render a perfectly usable
+ * older cache, or silently present fallback thresholds as the ledger's.
+ *
  * Authentication is deliberately never stored: the token is read from the
  * already-authenticated `gh` CLI at call time and passed to git through an
  * environment-scoped `http.extraheader`, so it never lands in `.git/config`,
@@ -121,4 +137,48 @@ export declare class RepoCache {
     projectFiles(): Promise<string[]>;
     /** Read one project file, bounded so one huge file cannot stall the console. */
     readProject(path: string): Promise<string>;
+    /**
+     * The ledger's `config/rules.yaml`, or `null` when the cache predates it.
+     *
+     * Returning `null` rather than throwing is deliberate: a cache cloned before
+     * the ledger added `config/` is a stale cache, not a broken one, and the caller
+     * falls back to the built-in thresholds while saying so.
+     */
+    readRules(): Promise<string | null>;
+    /**
+     * The ledger's `config/derive.yaml`.
+     *
+     * Declares which derived fields the ledger stores and which are computed at
+     * read time. The plugin needs it to honour the same split: a stored value is a
+     * pure function of the record, a computed one depends on the clock and must
+     * never be shown as though it were written down.
+     */
+    readDerive(): Promise<string | null>;
+    /**
+     * The ledger's `config/health.yaml`.
+     *
+     * Holds two separate staleness notions — facts (nothing happened) and judgment
+     * (nobody looked) — that fail for different reasons and must not be collapsed.
+     */
+    readHealth(): Promise<string | null>;
+    /** One file from `config/`, or `null` when absent or unreasonably large. */
+    private readConfigFile;
+    /**
+     * The agent conclusions under `signals/`, keyed by `poc_id`.
+     *
+     * A signal is an opinion, not a fact: it is written only by the agent account,
+     * and the ledger's own README requires consumers to degrade gracefully when a
+     * field is missing or the directory does not exist yet. A malformed signal
+     * therefore becomes a warning and is skipped — it must never fail the page that
+     * shows the human facts.
+     */
+    signalFiles(): Promise<Map<string, string>>;
+    /**
+     * Read a file that is allowed not to exist.
+     *
+     * `null` means "this cache does not carry it", which callers translate into a
+     * degraded-but-usable state. Only `ENOENT` is treated that way: a permission
+     * error is a real problem and must surface.
+     */
+    private readOptionalFile;
 }
