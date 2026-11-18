@@ -20,30 +20,90 @@
  */
 
 export const DETAIL_CSS = `
-/* ---------- two-pane layout ---------- */
-.wd-shell .dt-page {
-  display: grid;
-  grid-template-columns: 316px minmax(0, 1fr);
-  align-items: start;
-  min-height: 100%;
-}
-@media (max-width: 1100px) { .wd-shell .dt-page { grid-template-columns: minmax(0, 1fr); } }
-
-.wd-shell .dt-rail {
-  position: sticky; top: 0;
-  align-self: start;
-  display: flex; flex-direction: column; gap: 14px;
-  padding: 18px 18px 22px;
-  background: var(--wd-surface);
-  border-right: 1px solid var(--wd-hairline);
-  min-height: 100%;
-}
-@media (max-width: 1100px) { .wd-shell .dt-rail { position: static; border-right: 0; border-bottom: 1px solid var(--wd-hairline); } }
-.wd-shell .dt-pane {
-  display: flex; flex-direction: column; gap: 22px;
+/* ---------- page shell: banner + fixed two columns ---------- */
+.wd-shell .dt-shell {
+  display: flex; flex-direction: column;
+  gap: 16px;
   padding: 20px 28px 44px;
-  min-width: 0;
+  min-height: 100%;
 }
+.wd-shell .dt-body { display: flex; flex-direction: column; gap: 18px; }
+
+/* ---------- banner ---------- */
+.wd-shell .dt-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "main side" "nav nav";
+  gap: 10px 18px;
+  padding: 16px 20px;
+  background: var(--wd-surface);
+  border: 1px solid var(--wd-hairline);
+  border-radius: 10px;
+}
+.wd-shell .dt-header-main { grid-area: main; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.wd-shell .dt-header-back { align-self: flex-start; margin-bottom: 2px; }
+.wd-shell .dt-header-title {
+  margin: 0; font-size: 20px; line-height: 28px; font-weight: 700;
+  letter-spacing: -.01em; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere;
+}
+.wd-shell .dt-header-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.wd-shell .dt-header-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px; line-height: 15px; color: var(--dsw-alias-label-tertiary);
+}
+.wd-shell .dt-header-org { font-size: 10.5px; line-height: 15px; color: var(--dsw-alias-label-tertiary); }
+.wd-shell .dt-header-side { grid-area: side; display: flex; align-items: flex-start; gap: 18px; }
+.wd-shell .dt-header-pills { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+.wd-shell .dt-header-amount { display: flex; flex-direction: column; align-items: flex-end; gap: 0; }
+.wd-shell .dt-header-amount-label {
+  font-size: 9.5px; line-height: 14px; letter-spacing: .05em; text-transform: uppercase;
+  font-weight: 600; color: var(--wd-amber);
+}
+.wd-shell .dt-header-amount-value {
+  font-size: 22px; line-height: 28px; font-weight: 700;
+  font-variant-numeric: tabular-nums; color: var(--wd-amber); letter-spacing: -.02em;
+}
+.wd-shell .dt-header-amount-value[data-empty="true"] { font-size: 12px; font-weight: 500; font-style: italic; color: var(--dsw-alias-label-tertiary); }
+.wd-shell .dt-header-amount-unit { margin-left: 3px; font-size: 10.5px; font-weight: 500; }
+.wd-shell .dt-header-nav {
+  grid-area: nav; display: flex; align-items: center; gap: 10px;
+  padding-top: 10px; border-top: 1px solid var(--wd-hairline);
+}
+.wd-shell .dt-header-position { margin: 0 auto; font-size: 10px; color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
+
+/* ---------- the fixed two-column contract ---------- */
+.wd-shell .dt-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.72fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+@media (max-width: 1180px) { .wd-shell .dt-columns { grid-template-columns: minmax(0, 1fr); } }
+.wd-shell .dt-col-main,
+.wd-shell .dt-col-side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+
+/* ---------- Gate 0 card grid ---------- */
+.wd-shell .g0-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.wd-shell .g0-card {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 10px 12px; border-radius: 8px;
+  background: var(--wd-surface); border: 1px solid var(--wd-hairline);
+}
+.wd-shell .g0-card[data-present="false"] { background: var(--wd-inset); border-style: dashed; }
+.wd-shell .g0-card-head { display: flex; align-items: baseline; gap: 8px; }
+.wd-shell .g0-card-label { font-size: 11px; line-height: 16px; font-weight: 650; color: var(--dsw-alias-label-primary); }
+.wd-shell .g0-card-missing {
+  margin-left: auto; font-size: 9px; line-height: 13px; font-weight: 650;
+  color: var(--wd-amber); background: var(--wd-amber-soft);
+  padding: 1px 5px; border-radius: 4px; white-space: nowrap;
+}
+.wd-shell .g0-card-body {
+  margin: 0; font-size: 11px; line-height: 16px; color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+}
+.wd-shell .g0-card[data-prose="true"] .g0-card-body { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.wd-shell .g0-card-body[data-empty="true"] { font-style: italic; color: var(--dsw-alias-label-tertiary); }
+.wd-shell .g0-grid-note { margin: 0; font-size: 10px; line-height: 15px; color: var(--wd-amber); }
 
 /* ---------- rail ---------- */
 .wd-shell .dt-rail-head { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
@@ -413,6 +473,34 @@ export const DETAIL_CSS = `
 }
 .wd-shell .plan-criterion-status { white-space: nowrap; }
 
+/* ---------- scenario legend ---------- */
+.wd-shell .plan-scenario-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 2px; }
+.wd-shell .plan-scenario-legend-item { font-size: 9.5px; line-height: 14px; color: var(--dsw-alias-label-tertiary); }
+.wd-shell .plan-scenario-legend-item[data-tone="green"] { color: var(--wd-green); }
+.wd-shell .plan-scenario-legend-item[data-tone="amber"] { color: var(--wd-amber); }
+.wd-shell .plan-scenario-legend-item[data-tone="red"] { color: var(--wd-red); }
+
+/* ---------- next actions ---------- */
+.wd-shell .next-table {
+  width: 100%; border-collapse: collapse;
+  border: 1px solid var(--wd-hairline); border-radius: 9px; overflow: hidden;
+  background: var(--wd-surface);
+}
+.wd-shell .next-table th {
+  padding: 7px 10px; text-align: left;
+  font-size: 9.5px; line-height: 14px; letter-spacing: .05em; text-transform: uppercase;
+  font-weight: 600; color: var(--dsw-alias-label-tertiary);
+  background: var(--wd-inset); border-bottom: 1px solid var(--wd-hairline);
+}
+.wd-shell .next-table td {
+  padding: 8px 10px; font-size: 11.5px; line-height: 17px;
+  color: var(--dsw-alias-label-secondary); border-bottom: 1px solid var(--wd-hairline);
+  vertical-align: top;
+}
+.wd-shell .next-table tbody tr:last-child td { border-bottom: 0; }
+.wd-shell .next-goal { font-weight: 600; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
+.wd-shell .next-deadline { font-variant-numeric: tabular-nums; }
+
 /* ---------- scenario detail (layer two) ---------- */
 .wd-shell .plan-scenario-open {
   flex: none; margin-left: 2px; padding: 2px 6px;
@@ -500,4 +588,88 @@ export const DETAIL_CSS = `
 @media (prefers-reduced-motion: reduce) {
   .wd-shell .dim-card, .wd-shell .prog-card { transition: none; }
 }
+
+/* ================= v3.1 layout: banner + fixed two columns ================= */
+.wd-shell .dt-shell { display: flex; flex-direction: column; gap: 16px; padding: 20px 28px 44px; min-height: 100%; }
+.wd-shell .dt-body { display: flex; flex-direction: column; gap: 18px; }
+
+.wd-shell .dt-header {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "main side" "nav nav"; gap: 10px 18px;
+  padding: 16px 20px; background: var(--wd-surface);
+  border: 1px solid var(--wd-hairline); border-radius: 10px;
+}
+.wd-shell .dt-header-main { grid-area: main; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.wd-shell .dt-header-back { align-self: flex-start; margin-bottom: 2px; }
+.wd-shell .dt-header-title {
+  margin: 0; font-size: 20px; line-height: 28px; font-weight: 700;
+  letter-spacing: -.01em; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere;
+}
+.wd-shell .dt-header-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.wd-shell .dt-header-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; line-height: 15px; color: var(--dsw-alias-label-tertiary); }
+.wd-shell .dt-header-org { font-size: 10.5px; line-height: 15px; color: var(--dsw-alias-label-tertiary); }
+.wd-shell .dt-header-side { grid-area: side; display: flex; align-items: flex-start; gap: 18px; }
+.wd-shell .dt-header-pills { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+.wd-shell .dt-header-amount { display: flex; flex-direction: column; align-items: flex-end; }
+.wd-shell .dt-header-amount-label { font-size: 9.5px; line-height: 14px; letter-spacing: .05em; text-transform: uppercase; font-weight: 600; color: var(--wd-amber); }
+.wd-shell .dt-header-amount-value { font-size: 22px; line-height: 28px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--wd-amber); letter-spacing: -.02em; }
+.wd-shell .dt-header-amount-value[data-empty="true"] { font-size: 12px; font-weight: 500; font-style: italic; color: var(--dsw-alias-label-tertiary); }
+.wd-shell .dt-header-amount-unit { margin-left: 3px; font-size: 10.5px; font-weight: 500; }
+.wd-shell .dt-header-nav { grid-area: nav; display: flex; align-items: center; gap: 10px; padding-top: 10px; border-top: 1px solid var(--wd-hairline); }
+.wd-shell .dt-header-position { margin: 0 auto; font-size: 10px; color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
+
+.wd-shell .dt-columns { display: grid; grid-template-columns: minmax(0, 1.72fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 1180px) { .wd-shell .dt-columns { grid-template-columns: minmax(0, 1fr); } }
+.wd-shell .dt-col-main,
+.wd-shell .dt-col-side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+
+.wd-shell .g0-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.wd-shell .g0-card { display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; border-radius: 8px; background: var(--wd-surface); border: 1px solid var(--wd-hairline); }
+.wd-shell .g0-card[data-present="false"] { background: var(--wd-inset); border-style: dashed; }
+.wd-shell .g0-card-head { display: flex; align-items: baseline; gap: 8px; }
+.wd-shell .g0-card-label { font-size: 11px; line-height: 16px; font-weight: 650; color: var(--dsw-alias-label-primary); }
+.wd-shell .g0-card-missing { margin-left: auto; font-size: 9px; line-height: 13px; font-weight: 650; color: var(--wd-amber); background: var(--wd-amber-soft); padding: 1px 5px; border-radius: 4px; white-space: nowrap; }
+.wd-shell .g0-card-body { margin: 0; font-size: 11px; line-height: 16px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.wd-shell .g0-card[data-prose="true"] .g0-card-body { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.wd-shell .g0-card-body[data-empty="true"] { font-style: italic; color: var(--dsw-alias-label-tertiary); }
+.wd-shell .g0-grid-note { margin: 0; font-size: 10px; line-height: 15px; color: var(--wd-amber); }
+
+.wd-shell .next-table { width: 100%; border-collapse: collapse; border: 1px solid var(--wd-hairline); border-radius: 9px; overflow: hidden; background: var(--wd-surface); }
+.wd-shell .next-table th { padding: 7px 10px; text-align: left; font-size: 9.5px; line-height: 14px; letter-spacing: .05em; text-transform: uppercase; font-weight: 600; color: var(--dsw-alias-label-tertiary); background: var(--wd-inset); border-bottom: 1px solid var(--wd-hairline); }
+.wd-shell .next-table td { padding: 8px 10px; font-size: 11.5px; line-height: 17px; color: var(--dsw-alias-label-secondary); border-bottom: 1px solid var(--wd-hairline); vertical-align: top; }
+.wd-shell .next-table tbody tr:last-child td { border-bottom: 0; }
+.wd-shell .next-goal { font-weight: 600; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
+.wd-shell .next-deadline { font-variant-numeric: tabular-nums; }
+
+/*
+ * Balance the columns.
+ *
+ * The progress stream grows without limit (one card per round), while the left
+ * column holds a fixed set of commitments. Left alone, a project with ten rounds
+ * leaves the commitments column looking half-empty. Capping the stream keeps the
+ * two columns visually comparable and gives the reader an obvious scroll target,
+ * while every round stays reachable.
+ */
+.wd-shell .dt-col-side .prog-stream {
+  max-height: none; overflow-y: visible;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+.wd-shell .dt-col-side .prog-stream::-webkit-scrollbar { width: 6px; }
+.wd-shell .dt-col-side .prog-stream::-webkit-scrollbar-thumb { background: var(--wd-hairline); border-radius: 3px; }
+
+/* ---------- compact timeline row ---------- */
+.wd-shell .prog-card-compact { display: flex; flex-direction: column; gap: 5px; padding: 9px 11px; }
+.wd-shell .prog-card-compact .prog-head { gap: 8px; }
+.wd-shell .prog-change {
+  font-size: 9px; line-height: 13px; font-weight: 650;
+  color: var(--wd-primary); background: var(--wd-primary-soft);
+  padding: 1px 5px; border-radius: 4px; white-space: nowrap;
+}
+.wd-shell .prog-actual-line {
+  margin: 0; font-size: 11.5px; line-height: 17px;
+  color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere;
+}
+.wd-shell .prog-actual-line[data-empty="true"] { font-style: italic; color: var(--dsw-alias-label-tertiary); }
+.wd-shell .prog-scope-row { margin-top: 1px; }
 `

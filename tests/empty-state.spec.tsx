@@ -111,22 +111,26 @@ describe('an empty plan explains what is missing', () => {
   })
 })
 
-describe('the G0 worklist says its instruction once', () => {
-  it('does not repeat the same summary sentence on every row', async () => {
+describe('an empty G0 still names what is missing', () => {
+  it('lists every G0 prerequisite with its presence, not just a count', async () => {
+    // The G0 meter is the page's answer to "why can't this project move?", so it
+    // must name the fields. (An earlier version also rendered a separate
+    // five-row "待补清单" above the sections; the fixed two-column layout folds
+    // that job into the meter, which is why this asserts the meter itself.)
     const { container } = renderDetail(await detailOf('FIX-G0'))
+    const grid = container.querySelector('.g0-grid') as HTMLElement
+    expect(grid).toBeTruthy()
     const text = container.textContent ?? ''
-    // Five missing fields meant five identical "补齐下面 5 项…" sentences, which
-    // turned the most actionable block on the page into a wall of noise.
-    const occurrences = text.split('补齐下面').length - 1
-    expect(occurrences).toBe(1)
-  })
-
-  it('still names every field that has to be filled in', async () => {
-    const { container } = renderDetail(await detailOf('FIX-G0'))
-    const text = container.textContent ?? ''
-    for (const label of ['客户为什么测', '我们为什么测', '项目流程/决策链', '测后客户决策', '客户技术责任人']) {
+    // The design's six G0 cells. `tech_owner` is one of the five prerequisites but
+    // lives in the identity block, so it is named there rather than in the grid.
+    for (const label of ['客户为什么测', '我们为什么测', '项目流程/决策链', '测后客户决策', '主要竞争对手', 'G0 Review']) {
       expect(text).toContain(label)
     }
+    // tech_owner is named in the identity block, under its compact label.
+    expect(text).toContain('客户技术人')
+    // The grid reports how many of the five prerequisites are answered rather
+    // than staying silent about completeness.
+    expect(text).toContain('0 / 5')
   })
 })
 

@@ -265,7 +265,7 @@ function StageContext({ stage, done, pending, t }: {
 }
 
 /** A section frame: heading, optional kicker, and a body. */
-function Section({ title, kicker, children }: { title: string; kicker?: string; children: ReactNode }): JSX.Element {
+function Section({ title, kicker, children }: { title: string; kicker?: string | undefined; children: ReactNode }): JSX.Element {
   return (
     <section className="dsec">
       <header className="dsec-head">
@@ -431,113 +431,49 @@ function IdentityRail({ props }: { props: DetailProps }): JSX.Element {
 function ProgressItem({ entry, index, t, locale, detail }: { entry: ProgressView; index: number; t: Translate; locale: string; detail: ProjectDetail }): JSX.Element {
   const tone = recognitionTone(entry.customer.recognition)
   const ratio = completionRatio(entry.completion)
-  const hasNext = entry.next.goal !== '' || entry.next.owner !== '' || entry.next.deadline !== ''
+  /**
+   * A compact timeline row, not a card.
+   *
+   * The design puts one line per round here — date, type, what changed, and the
+   * result — because the timeline answers "did anything move?" and the proof
+   * behind a round belongs to the scenario drill-down. Rendering the full card
+   * (goal, evidence, customer, G3 verdict, next step) made the right column four
+   * times taller than the left and buried the shape of the history.
+   *
+   * Everything omitted here is still reachable: the scenario detail lists the
+   * evidence of every round that cites it, and the full entry stays in the
+   * snapshot for the worklist and the gap scan.
+   */
   return (
     <li className="prog-item" data-tone={tone} data-latest={index === 0}>
       <div className="prog-gutter" aria-hidden="true">
         <span className="prog-node" data-tone={tone} />
       </div>
-      <article className="prog-card">
+      <article className="prog-card prog-card-compact">
         <header className="prog-head">
           <time className="prog-date" dateTime={entry.date}>{formatDate(entry.date, locale) || '—'}</time>
           <span className="prog-type">{entry.type === '' ? t('progressTypeUnset') : entry.type}</span>
-          {entry.seq === null ? null : <span className="prog-seq">{format(t('dtProgressSeq'), { seq: entry.seq })}</span>}
+          {entry.change === '' ? null : <span className="prog-change">{entry.change}</span>}
           {ratio === null ? (
-            entry.completion === '' ? null : <span className="prog-chip">{t('dtProgressCompletion')} {entry.completion}</span>
+            entry.completion === '' ? null : <span className="prog-chip">{entry.completion}</span>
           ) : (
             <span className="prog-meter">
-              <span className="prog-meter-label">{t('dtProgressCompletion')}</span>
               <InlineMeter value={ratio} max={1} tone={ratio >= 1 ? 'green' : 'blue'} />
               <span className="prog-meter-value">{entry.completion}</span>
             </span>
           )}
         </header>
-
-        {entry.goal === '' && entry.actual === '' ? null : (
-          <div className="prog-pair">
-            {entry.goal === '' ? null : (
-              <div className="prog-goal">
-                <span className="prog-pair-label">{t('dtProgressGoal')}</span>
-                <span className="prog-pair-value">{entry.goal}</span>
-              </div>
-            )}
-            {entry.actual === '' ? null : (
-              <div className="prog-actual">
-                <span className="prog-pair-label">{t('dtProgressActual')}</span>
-                <span className="prog-pair-value">{entry.actual}</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {entry.scenarioIds.length === 0 ? null : (
-          <div className="prog-scope">
-            <span className="prog-scope-label">{t('dtProgressScope')}</span>
-            {/* v3.1 cites scenarios by id. The name is resolved against the plan
-                so the timeline reads in words while the reference stays stable. */}
-            <div className="chip-row">
-              {entry.scenarioIds.map((id, itemIndex) => {
-                const linked = scenarioNameOf(detail, id)
-                return <span key={`${id}:${itemIndex}`} className="chip">{linked === '' ? id : linked}</span>
-              })}
-            </div>
-          </div>
-        )}
-
-        <div className="prog-evidence">
-          <span className="prog-block-label">{t('dtProgressEvidence')}</span>
-          {entry.evidence.length === 0 ? (
-            <span className="prog-missing">{t('dtProgressEvidenceNone')}</span>
-          ) : (
-            <div className="chip-row">
-              {entry.evidence.map((item, itemIndex) => {
-                const label = `${item.type === '' ? '' : `${item.type} · `}${item.title === '' ? t('emptyField') : item.title}`
-                return item.link === '' ? (
-                  <span key={`${item.title}:${itemIndex}`} className="chip">{label}</span>
-                ) : (
-                  <a key={`${item.title}:${itemIndex}`} className="chip prog-evidence-link" href={item.link} target="_blank" rel="noreferrer" title={item.link}>
-                    {label}
-                    <span className="prog-external" aria-hidden="true">↗</span>
-                  </a>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="prog-customer">
-          <span className="prog-block-label">{t('dtProgressCustomer')}</span>
-          {entry.customer.syncedWith === '' ? (
-            <span className="prog-missing">{t('dtProgressCustomerNone')}</span>
-          ) : (
-            <span className="chip">{entry.customer.syncedWith}</span>
-          )}
-          {entry.customer.recognition === '' ? null : (
-            <span className={`status-pill tone-${tone}`}><span className="status-dot" />{entry.customer.recognition}</span>
-          )}
-          {entry.gate3_1 === '' ? null : <span className="chip">{t('gate3_1Label')}：{entry.gate3_1}</span>}
-          {entry.gate3_2 === '' ? null : <span className="chip">{t('gate3_2Label')}：{entry.gate3_2}</span>}
-        </div>
-
-        {entry.customer.feedback === '' ? null : (
-          <div className="prog-feedback">
-            <span className="prog-block-label">{t('dtProgressFeedback')}</span>
-            <span className="prog-feedback-copy prose">{entry.customer.feedback}</span>
-          </div>
-        )}
-
-        {hasNext ? (
-          <div className="prog-next">
-            <span className="prog-next-label">{t('dtProgressNext')}</span>
-            <div className="prog-next-body">
-              {entry.next.goal === '' ? null : <span className="prog-next-goal">{entry.next.goal}</span>}
-              {entry.next.owner === '' ? null : <span className="chip">@ {entry.next.owner}</span>}
-              {entry.next.deadline === '' ? null : <span className="chip">{t('dtProgressDeadline')} {formatDate(entry.next.deadline, locale)}</span>}
-            </div>
-          </div>
+        {entry.actual === '' ? (
+          <p className="prog-actual-line" data-empty="true">{t('emptyField')}</p>
         ) : (
-          <div className="prog-next prog-next-empty">
-            <span className="prog-missing">{t('dtProgressNextNone')}</span>
+          <p className="prog-actual-line">{entry.actual}</p>
+        )}
+        {entry.scenarioIds.length === 0 ? null : (
+          <div className="chip-row prog-scope-row">
+            {entry.scenarioIds.map((id, itemIndex) => {
+              const linked = scenarioNameOf(detail, id)
+              return <span key={`${id}:${itemIndex}`} className="chip">{linked === '' ? id : linked}</span>
+            })}
           </div>
         )}
       </article>
@@ -847,42 +783,113 @@ function ScenarioDetail({ detail, scenarioId, t }: { detail: ProjectDetail; scen
 }
 
 /** The plan: criteria table, numbered scenarios, risks with severity, prose meta. */
-function PlanPanels({ detail, t, onOpenScenario }: { detail: ProjectDetail; t: Translate; onOpenScenario: (id: string) => void }): JSX.Element {
+/**
+ * The page banner: what this project is, with the two numbers that decide how
+ * much attention it deserves.
+ *
+ * The design puts identity in a banner rather than a persistent rail: the body
+ * below is a fixed two-column contract, and a 316px rail would take that width
+ * away from the commitments column at every gate.
+ */
+function PageHeader({ props }: { props: DetailProps }): JSX.Element {
+  const { detail, t, position, onPrev, onNext, onBack } = props
+  const summary = detail.summary
+  const org = [orgText(detail.org.system), orgText(detail.org.company), summary.pocType].filter((part) => part !== '')
+  const owner = summary.owner === '' ? '' : `${t('dtOwnerLabel')} ${summary.owner}`
+
+  return (
+    <header className="dt-header">
+      <div className="dt-header-main">
+        <button type="button" className="btn btn-small dt-header-back" onClick={onBack}>{t('back')}</button>
+        <h1 className="dt-header-title">{summary.name}</h1>
+        <div className="dt-header-meta">
+          <span className="dt-header-id mono">{summary.pocId}</span>
+          {org.length === 0 ? null : <span className="dt-header-org">{org.join(' · ')}</span>}
+          {owner === '' ? null : <span className="dt-header-org">{owner}</span>}
+        </div>
+      </div>
+      <div className="dt-header-side">
+        <div className="dt-header-pills">
+          <span className="status-pill tone-blue">
+            <span className="status-dot" />
+            {summary.closed ? t('stageClosed') : summary.stageLabel === '' ? t('stageUnknown') : summary.stageLabel}
+          </span>
+          {summary.status === '' ? null : <span className="status-pill tone-slate">{summary.status}</span>}
+          {summary.priority === '' ? null : (
+            <span className={`status-pill tone-${summary.priority === 'normal' ? 'slate' : 'amber'}`}>{t(priorityLabelKey(summary.priority))}</span>
+          )}
+        </div>
+        <div className="dt-header-amount">
+          <span className="dt-header-amount-label">{t('dtAmountLabel')}</span>
+          {summary.amountWan === 0 ? (
+            <span className="dt-header-amount-value" data-empty="true">{t('dtUnset')}</span>
+          ) : (
+            <span className="dt-header-amount-value">
+              {formatWan(summary.amountWan)}
+              <span className="dt-header-amount-unit">{t('statAmountUnit')}</span>
+            </span>
+          )}
+        </div>
+      </div>
+      <nav className="dt-header-nav" aria-label={t('dtRailTitle')}>
+        <button type="button" className="btn btn-small" disabled={onPrev === null} onClick={onPrev ?? undefined}>← {t('dtPrevProject')}</button>
+        <span className="dt-header-position">{format(t('dtPosition'), { index: position.index, total: position.total })}</span>
+        <button type="button" className="btn btn-small" disabled={onNext === null} onClick={onNext ?? undefined}>{t('dtNextProject')} →</button>
+      </nav>
+    </header>
+  )
+}
+
+/**
+ * Gate 0 as a 2×3 card grid: the six questions that decide whether the project
+ * is worth doing, each answered in its own cell.
+ *
+ * A five-cell meter could say *how many* answers were missing but not *which
+ * question* — and "no decision chain" and "no competitor" are different problems
+ * with different fixes. The design is explicit that this block is a grid.
+ */
+function Gate0Grid({ detail, t }: { detail: ProjectDetail; t: Translate }): JSX.Element {
+  const gate0 = detail.gate0
+  const answered = gate0.checklist.filter((item) => item.present).length
+  const cards: Array<{ key: string; label: string; value: string; present: boolean; prose: boolean }> = [
+    { key: 'why_customer', label: t('whyCustomerTest'), value: gate0.whyCustomer, present: gate0.whyCustomer !== '', prose: true },
+    { key: 'why_us', label: t('whyWeTest'), value: gate0.whyUs, present: gate0.whyUs !== '', prose: true },
+    { key: 'post_poc_decision', label: t('postPocDecision'), value: gate0.postPocDecision, present: gate0.postPocDecision !== '', prose: false },
+    { key: 'decision_chain', label: t('decisionChain'), value: gate0.decisionChain, present: gate0.decisionChain !== '', prose: false },
+    { key: 'competitor', label: t('competitor'), value: gate0.competitor, present: gate0.competitor !== '', prose: false },
+    {
+      key: 'review',
+      label: t('dtG0ReviewTitle'),
+      value: gate0.conclusion === '' ? '' : [gate0.conclusion, gate0.reviewer, gate0.reviewedAt].filter((part) => part !== '').join(' · '),
+      present: gate0.conclusion !== '',
+      prose: false,
+    },
+  ]
+  return (
+    <Section title={t('dtG0GridTitle')} kicker={format(t('dtG0Answered'), { answered, total: gate0.checklist.length })}>
+      <div className="g0-grid">
+        {cards.map((card) => (
+          <div key={card.key} className="g0-card" data-present={card.present} data-prose={card.prose}>
+            <div className="g0-card-head">
+              <span className="g0-card-label">{card.label}</span>
+              {card.present ? null : <span className="g0-card-missing">{t('dtG0Missing')}</span>}
+            </div>
+            <p className="g0-card-body" data-empty={!card.present}>{card.present ? card.value : t('emptyField')}</p>
+          </div>
+        ))}
+      </div>
+      {gate0.missing.length === 0 ? null : (
+        <p className="g0-grid-note">{format(t('dtG0MissingNote'), { count: gate0.missing.length })}</p>
+      )}
+    </Section>
+  )
+}
+
+/** The success criteria, as a table with the ledger's derived status. */
+function CriteriaPanel({ detail, t }: { detail: ProjectDetail; t: Translate }): JSX.Element {
   const plan = detail.plan
   return (
-    <Section title={t('dtPlanTitle')}>
-      <div className="plan-meta">
-        <Prose label={t('dtPlanPain')} value={plan.customerPain} t={t} />
-        <Prose label={t('dtPlanRecognition')} value={plan.expectedRecognition} t={t} />
-        <Prose label={t('dtPlanEdge')} value={plan.ourEdge} t={t} />
-      </div>
-
-      <div className="plan-strip">
-        <span className="plan-strip-item">
-          <span className="plan-strip-label">{t('dtPlanWindow')}</span>
-          <span className="plan-strip-value">{plan.timelineStart === '' && plan.timelineEnd === '' ? t('dtUnset') : `${plan.timelineStart === '' ? '—' : plan.timelineStart} → ${plan.timelineEnd === '' ? '—' : plan.timelineEnd}`}</span>
-        </span>
-        <span className="plan-strip-item">
-          <span className="plan-strip-label">{t('dtPlanGate1')}</span>
-          <span className={`status-pill tone-${plan.gate1Conclusion === '通过' ? 'green' : 'slate'}`}><span className="status-dot" />{plan.gate1Conclusion === '' ? t('dtUnset') : plan.gate1Conclusion}</span>
-        </span>
-        <span className="plan-strip-item">
-          <span className="plan-strip-label">{t('dtPlanGate2')}</span>
-          <span className={`status-pill tone-${plan.gate2Ready === 'Ready' ? 'green' : plan.gate2Ready === '' ? 'slate' : 'amber'}`}><span className="status-dot" />{plan.gate2Ready === '' ? t('dtUnset') : plan.gate2Ready}</span>
-        </span>
-        {plan.reportNodes.length === 0 ? null : (
-          <span className="plan-strip-item">
-            <span className="plan-strip-label">{t('dtPlanReportNodes')}</span>
-            <span className="chip-row">{plan.reportNodes.map((node, index) => <span key={`${node}:${index}`} className="chip">{node}</span>)}</span>
-          </span>
-        )}
-      </div>
-
-      <div className="plan-block">
-        <header className="plan-block-head">
-          <h3 className="plan-block-title">{t('dtPlanCriteria')}</h3>
-          <span className="plan-block-note">{plan.criteria.length === 0 ? t('dtPlanCriteriaNone') : format(t('dtPlanCriteriaCount'), { count: plan.criteria.length })}</span>
-        </header>
+    <Section title={t('dtPlanCriteria')} kicker={plan.criteria.length === 0 ? undefined : format(t('dtPlanCriteriaCount'), { count: plan.criteria.length })}>
         {plan.criteria.length === 0 ? (
           <Blank text={t('dtPlanCriteriaNone')} />
         ) : (
@@ -921,13 +928,21 @@ function PlanPanels({ detail, t, onOpenScenario }: { detail: ProjectDetail; t: T
             </tbody>
           </table>
         )}
-      </div>
+    </Section>
+  )
+}
 
-      <div className="plan-block">
-        <header className="plan-block-head">
-          <h3 className="plan-block-title">{t('dtPlanScenarios')}</h3>
-          <span className="plan-block-note">{plan.scenarios.length === 0 ? t('dtPlanScenariosNone') : format(t('dtPlanScenariosCount'), { count: plan.scenarios.length })}</span>
-        </header>
+/**
+ * The test scenarios, each row carrying its derived state and a way in.
+ *
+ * The left edge colour IS the finding: 无证据 is the only red, because it means
+ * "claimed, never backed". The entry point matters as much — without a visible
+ * "详情" the second layer exists but nobody knows to look for it.
+ */
+function ScenarioPanel({ detail, t, onOpenScenario }: { detail: ProjectDetail; t: Translate; onOpenScenario: (id: string) => void }): JSX.Element {
+  const plan = detail.plan
+  return (
+    <Section title={t('dtPlanScenarios')} kicker={plan.scenarios.length === 0 ? undefined : format(t('dtPlanScenariosCount'), { count: plan.scenarios.length })}>
         {plan.scenarios.length === 0 ? (
           <Blank text={t('dtPlanScenariosNone')} />
         ) : (
@@ -980,94 +995,102 @@ function PlanPanels({ detail, t, onOpenScenario }: { detail: ProjectDetail; t: T
             })}
           </ol>
         )}
-      </div>
-
-      <div className="plan-block">
-        <header className="plan-block-head">
-          <h3 className="plan-block-title">{t('dtPlanRisks')}</h3>
-          <span className="plan-block-note">{plan.risks.length === 0 ? t('dtPlanRisksNone') : format(t('dtPlanRisksCount'), { count: plan.risks.length })}</span>
-        </header>
-        {plan.risks.length === 0 ? (
-          <Blank text={t('dtPlanRisksNone')} />
-        ) : (
-          <ul className="plan-risks">
-            {plan.risks.map((risk, index) => (
-              <li key={`${risk.name}:${index}`} className="plan-risk" data-tone={riskTone(risk.level)}>
-                <span className="plan-risk-dot" aria-hidden="true" />
-                <span className="plan-risk-text">
-                  <span className="plan-risk-name">{risk.name === '' ? t('emptyField') : risk.name}</span>
-                  {risk.level === '' ? null : <span className="plan-risk-level">{risk.level}</span>}
-                  {risk.mitigation === '' ? null : <span className="plan-risk-mitigation">{t('dtPlanMitigation')}：{risk.mitigation}</span>}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
     </Section>
   )
 }
 
-/** The outcome: three prose columns, the milestone callout, and the meta row. */
-function OutcomePanel({ detail, t }: { detail: ProjectDetail; t: Translate }): JSX.Element {
-  const outcome = detail.outcome
-  const hasMilestone = outcome.milestone !== ''
+/** The tracked risks, with the severity the ledger records. */
+function RiskPanel({ detail, t }: { detail: ProjectDetail; t: Translate }): JSX.Element {
+  const risks = detail.plan.risks
   return (
-    <Section title={t('dtOutcomeTitle')}>
-      <div className="out-triple">
-        <Prose label={t('dtOutcomeProved')} value={outcome.proved} t={t} />
-        <Prose label={t('dtOutcomeRecognized')} value={outcome.recognized} t={t} />
-        <Prose label={t('dtOutcomeNext')} value={outcome.nextBusiness} t={t} />
-      </div>
-
-      <div className="out-milestone" data-present={hasMilestone}>
-        <span className="out-milestone-label">{t('dtOutcomeMilestone')}</span>
-        {hasMilestone ? (
-          <span className="out-milestone-text">{outcome.milestone}</span>
-        ) : (
-          <span className="out-milestone-missing">{t('dtOutcomeMilestoneNone')}</span>
-        )}
-        {hasMilestone ? (
-          <div className="out-milestone-meta">
-            {outcome.businessOwner === '' ? null : <span className="chip">{format(t('dtOutcomeMilestoneOwner'), { owner: outcome.businessOwner })}</span>}
-            {outcome.businessDeadline === '' ? null : <span className="chip">{format(t('dtOutcomeMilestoneDeadline'), { date: outcome.businessDeadline })}</span>}
-            {outcome.businessStatus === '' ? null : <span className="chip">{format(t('dtOutcomeMilestoneStatus'), { status: outcome.businessStatus })}</span>}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="out-meta">
-        <Prose label={t('dtOutcomeProof')} value={outcome.ourProof} t={t} />
-        <Prose label={t('dtOutcomeRemaining')} value={outcome.remainingRisks} t={t} />
-        <Prose label={t('dtOutcomeOverall')} value={outcome.overall} t={t} />
-        <Prose label={t('dtOutcomeReviewed')} value={outcome.reviewedAt} t={t} />
-      </div>
+    <Section title={t('dtPlanRisks')} kicker={risks.length === 0 ? undefined : format(t('dtPlanRisksCount'), { count: risks.length })}>
+      {risks.length === 0 ? (
+        <Blank text={t('dtPlanRisksNone')} />
+      ) : (
+        <ul className="plan-risks">
+          {risks.map((risk, index) => (
+            <li key={`${risk.name}:${index}`} className="plan-risk" data-tone={riskTone(risk.level)}>
+              <span className="plan-risk-dot" aria-hidden="true" />
+              <span className="plan-risk-text">
+                <span className="plan-risk-name">{risk.name === '' ? t('emptyField') : risk.name}</span>
+                {risk.level === '' ? null : <span className="plan-risk-level">{risk.level}</span>}
+                {risk.mitigation === '' ? null : <span className="plan-risk-mitigation">{t('dtPlanMitigation')}：{risk.mitigation}</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </Section>
   )
 }
 
 /**
- * The detail page: the rail on the left, a stage-aware pane on the right.
+ * The closing block: what happens next, who owns it, and by when.
  *
- * The pane is NOT a fixed five-section stack any more. On a ledger where every
- * project sits at G0 with no progress, the old fixed order opened on three empty
- * sections and buried the one thing the reader could act on — the G0 fields they
- * still had to fill in. The order now follows the gate the project is actually
- * in, so the first screen is the work that gate implies.
- *
- * Two invariants keep this from becoming a trap:
- *
- * 1. **Nothing is hidden.** Sections the current stage deprioritizes move into a
- *    collapsed "other sections" fold, not out of the page. A reader checking last
- *    stage's evidence can always open it.
- * 2. **Unknown stages degrade, they do not break.** A stage the ledger cannot
- *    parse keeps the historical full order rather than guessing.
+ * Rule 11 is "achieved, nothing followed" — the ledger's highest-value gap — so
+ * the page ends by asking for exactly that rather than trailing off into prose.
  */
+function NextActionsPanel({ detail, t }: { detail: ProjectDetail; t: Translate }): JSX.Element {
+  const outcome = detail.outcome
+  const newestNext = detail.progress.find((entry) => entry.next.goal !== '' || entry.next.owner !== '' || entry.next.deadline !== '')
+  const rows: Array<{ goal: string; owner: string; deadline: string; status: string; tone: string }> = []
+  if (outcome.milestone !== '' || outcome.businessOwner !== '' || outcome.businessDeadline !== '') {
+    rows.push({
+      goal: outcome.milestone,
+      owner: outcome.businessOwner,
+      deadline: outcome.businessDeadline,
+      status: outcome.businessStatus,
+      tone: outcome.businessStatus === '已进入下一里程碑' ? 'green' : outcome.businessStatus === '' ? 'slate' : 'amber',
+    })
+  }
+  if (newestNext !== undefined) {
+    // The entry's own next step is a plan, not a tracked milestone: say so rather
+    // than smuggling the entry's date into a status column.
+    rows.push({
+      goal: newestNext.next.goal,
+      owner: newestNext.next.owner,
+      deadline: newestNext.next.deadline,
+      status: t('dtStatusNotStarted'),
+      tone: 'slate',
+    })
+  }
+  return (
+    <Section title={t('dtNextActionsTitle')} kicker={t('dtNextActionsKicker')}>
+      {rows.length === 0 ? (
+        <Blank text={t('dtNextActionsNone')} />
+      ) : (
+        <table className="next-table">
+          <thead>
+            <tr>
+              <th>{t('dtNextGoal')}</th>
+              <th>{t('dtNextOwner')}</th>
+              <th>{t('dtNextDeadline')}</th>
+              <th>{t('dtNextStatus')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={`${row.goal}:${index}`}>
+                <td className="next-goal">{row.goal === '' ? t('emptyField') : row.goal}</td>
+                <td>{row.owner === '' ? '—' : row.owner}</td>
+                <td className="next-deadline">{row.deadline === '' ? '—' : row.deadline}</td>
+                <td>
+                  <span className={`status-pill tone-${row.tone}`}>
+                    <span className="status-dot" />
+                    {row.status === '' ? t('dtUnset') : row.status}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Section>
+  )
+}
+
 export function DetailPage(props: DetailProps): JSX.Element {
   const { detail, t, locale } = props
-  const stage = detail.summary.closed ? 'closed' : detail.summary.stage
-  const skeleton = SKELETON_FOR[stage as SkeletonKey] ?? SKELETON_FOR.unknown
-  const [foldOpen, setFoldOpen] = useState(false)
   /**
    * Which scenario is open, or `null` for the overview.
    *
@@ -1078,41 +1101,14 @@ export function DetailPage(props: DetailProps): JSX.Element {
    */
   const [scenarioId, setScenarioId] = useState<string | null>(null)
 
-  /**
-   * One named section, so the skeleton can order them by key.
-   *
-   * A scenario open replaces the reading pane rather than appending to it: the
-   * detail is a drill-down, and leaving the full plan above it would bury the
-   * evidence the reader came for.
-   */
-  const sections: Record<SectionKey, JSX.Element> = {
-    basic: <BasicInfo key="basic" detail={detail} t={t} />,
-    progress: <ProgressStream key="progress" detail={detail} t={t} locale={locale} />,
-    dimensions: <DimensionGrid key="dimensions" detail={detail} t={t} />,
-    gate0: <Gate0Meter key="gate0" detail={detail} t={t} />,
-    plan: <PlanPanels key="plan" detail={detail} t={t} onOpenScenario={setScenarioId} />,
-    outcome: <OutcomePanel key="outcome" detail={detail} t={t} />,
-  }
-
-  const primary = skeleton.sections
-  const secondary = (['basic', 'progress', 'dimensions', 'gate0', 'plan', 'outcome'] as SectionKey[])
-    .filter((key) => !primary.includes(key))
-
-  const stageState = stageStateOf(detail)
-  // The worklist reads the same blocker rows the portfolio panel does, narrowed
-  // to this project, so the two can never disagree about what is missing.
-  const projectBlockers = props.blockers ?? []
-
-  // A scenario drill-down owns the reading pane while it is open. The rail stays,
-  // because the identity of the project is the context the evidence is read in.
+  // A scenario drill-down replaces the body. The banner stays, because the
+  // identity of the project is the context the evidence is read in.
   if (scenarioId !== null) {
     return (
-      <div className="dt-page">
-        <IdentityRail props={props} />
-        <main className="dt-pane">
-          <button type="button" className="sd-back" onClick={() => setScenarioId(null)}>
-            {t('dtScenarioBack')}
-          </button>
+      <div className="dt-shell">
+        <PageHeader props={props} />
+        <main className="dt-body">
+          <button type="button" className="sd-back" onClick={() => setScenarioId(null)}>{t('dtScenarioBack')}</button>
           <ScenarioDetail detail={detail} scenarioId={scenarioId} t={t} />
         </main>
       </div>
@@ -1120,34 +1116,31 @@ export function DetailPage(props: DetailProps): JSX.Element {
   }
 
   return (
-    <div className="dt-page">
-      <IdentityRail props={props} />
-      <main className="dt-pane">
-        <StageContext stage={stage} done={stageState.done} pending={stageState.pending} t={t} />
-        {/* The worklist sits ABOVE the sections: on a ledger where most
-            projects are untouched, "what do I fill in" is the reason the page
-            was opened, and a list of empty sections answers it poorly. */}
-        <section className="dt-worklist" aria-label={t('worklistTitle')}>
-          <Worklist detail={detail} rows={projectBlockers} t={t} />
-        </section>
-        {primary.map((key) => sections[key])}
-        {secondary.length === 0 ? null : (
-          <section className="dt-fold" data-open={foldOpen}>
-            <button
-              type="button"
-              className="dt-fold-head"
-              aria-expanded={foldOpen}
-              onClick={() => setFoldOpen((value) => !value)}
-            >
-              <h2 className="dt-fold-title">{t('dtOtherSections')}</h2>
-              <span className="dt-fold-hint">{t('dtOtherSectionsHint')}</span>
-              <span className="dt-fold-arrow" aria-hidden="true">{foldOpen ? '▴' : '▾'}</span>
-            </button>
-            <div className="dt-fold-body">
-              {secondary.map((key) => sections[key])}
-            </div>
-          </section>
-        )}
+    <div className="dt-shell">
+      <PageHeader props={props} />
+      <main className="dt-body">
+        {/*
+         * A FIXED two-column contract at every gate: commitments left, the record
+         * right, next actions closing across both. Only the content changes with
+         * the gate, never the position.
+         *
+         * An earlier version reordered and collapsed sections per gate, which put
+         * the scenario status — the one thing a G3/G4 reader opens the page for —
+         * inside a folded "other sections" block.
+         */}
+        <div className="dt-columns">
+          <div className="dt-col-main">
+            <Gate0Grid detail={detail} t={t} />
+            <CriteriaPanel detail={detail} t={t} />
+            <ScenarioPanel detail={detail} t={t} onOpenScenario={setScenarioId} />
+          </div>
+          <div className="dt-col-side">
+            <BasicInfo detail={detail} t={t} />
+            <ProgressStream detail={detail} t={t} locale={locale} />
+            <RiskPanel detail={detail} t={t} />
+          </div>
+        </div>
+        <NextActionsPanel detail={detail} t={t} />
       </main>
     </div>
   )

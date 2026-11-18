@@ -149,14 +149,14 @@ describe('layer one — the criterion table carries its own status', () => {
 })
 
 describe('layer two — the drill-down', () => {
-  it('opens a scenario without leaving the project rail behind', async () => {
+  it('opens a scenario without leaving the project banner behind', async () => {
     const detail = await detailOf('FIX-G3')
     const { container } = renderDetail(detail)
     const openButtons = container.querySelectorAll('.plan-scenario-open')
     fireEvent.click(openButtons[0] as HTMLElement)
 
-    // The rail is the context the evidence is read in, so it must survive.
-    expect(container.querySelector('.dt-rail')).toBeTruthy()
+    // The banner is the context the evidence is read in, so it must survive.
+    expect(container.querySelector('.dt-header')).toBeTruthy()
     expect(screen.getByText('场景详情')).toBeTruthy()
     // The plan list is replaced, not appended to: this is a drill-down.
     expect(container.querySelectorAll('.plan-scenario')).toHaveLength(0)
@@ -191,7 +191,7 @@ describe('layer two — the drill-down', () => {
   it('returns to the overview', async () => {
     const { container } = renderDetail(await detailOf('FIX-G3'))
     fireEvent.click(container.querySelectorAll('.plan-scenario-open')[0] as HTMLElement)
-    expect(container.querySelector('.dt-rail')).toBeTruthy()
+    expect(container.querySelector('.dt-header')).toBeTruthy()
     fireEvent.click(container.querySelector('.sd-back') as HTMLElement)
     expect(container.querySelectorAll('.plan-scenario')).toHaveLength(3)
   })

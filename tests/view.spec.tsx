@@ -594,7 +594,7 @@ describe('overview page', () => {
     fireEvent.keyDown(shell, { key: 'ArrowDown' })
     await waitFor(() => expect(document.querySelectorAll('.pcard[data-selected="true"]').length).toBe(1))
     fireEvent.keyDown(shell, { key: 'Enter' })
-    await waitFor(() => expect(document.querySelectorAll('.dt-rail').length).toBe(1))
+    await waitFor(() => expect(document.querySelectorAll('.dt-header').length).toBe(1))
   })
 
   it('shows the latest progress of the newest entry', async () => {
@@ -886,117 +886,80 @@ describe('detail page', () => {
   it('opens from a card and shows the layered record', async () => {
     await renderPage(makeApi())
     openProject('某某制造产线安全接入')
-    await waitFor(() => expect(document.querySelectorAll('.dt-rail').length).toBe(1))
-    // The rail is the persistent "project file"; the stream is the reading pane.
+    await waitFor(() => expect(document.querySelectorAll('.dt-header').length).toBe(1))
+    // The design's fixed block set: the banner carries identity, then the two
+    // columns hold commitments and the record, and next actions close the page.
     expect(screen.getAllByText('进展流').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('四维结果').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('G0 必填完整度').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('计划（G1 / G2）').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('结论').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Gate 0 · 关键信息区').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('成功指标').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('验证场景').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('风险').length).toBeGreaterThan(0)
   })
 
-  it('leads the G4 pane with the outcome, not the progress stream', async () => {
+  it('keeps the same two-column contract at every gate', async () => {
+    // The page is deliberately NOT gate-adaptive any more. An earlier version
+    // reordered and collapsed sections per gate, which put the scenario status —
+    // the one thing a G3/G4 reader opens the page for — inside a folded block.
+    // Commitments stay left, the record stays right, at every gate.
     await renderPage(makeApi())
     openProject('某某制造产线安全接入')
-    await waitFor(() => expect(document.querySelectorAll('.dt-stage-context').length).toBe(1))
-    // The G4 skeleton puts the four dimensions and the conclusion first.
-    const context = document.querySelector('.dt-stage-context')
-    expect(context?.textContent).toContain('G4 结果转化')
-    const firstSection = document.querySelector('.dt-pane .dsec')
-    expect(firstSection?.textContent).toContain('四维结果')
+    await waitFor(() => expect(document.querySelectorAll('.dt-columns').length).toBe(1))
+    const main = document.querySelector('.dt-col-main') as HTMLElement
+    const side = document.querySelector('.dt-col-side') as HTMLElement
+    expect(main).toBeTruthy()
+    expect(side).toBeTruthy()
+
+    const mainTitles = [...main.querySelectorAll('.dsec-title')].map((node) => node.textContent)
+    expect(mainTitles).toContain('Gate 0 · 关键信息区')
+    expect(mainTitles).toContain('成功指标')
+    expect(mainTitles).toContain('验证场景')
+
+    const sideTitles = [...side.querySelectorAll('.dsec-title')].map((node) => node.textContent)
+    expect(sideTitles).toContain('基本信息')
+    expect(sideTitles).toContain('进展流')
+    expect(sideTitles).toContain('风险')
   })
 
-  it('moves the deprioritized sections into a fold instead of dropping them', async () => {
+  it('never hides the scenario status behind a collapsed section', async () => {
+    // The regression this guards: a G3/G4 project whose scenarios are the point
+    // of the page must show them without opening anything.
     await renderPage(makeApi())
     openProject('某某制造产线安全接入')
-    await waitFor(() => expect(document.querySelectorAll('.dt-fold').length).toBe(1))
-    const fold = document.querySelector('.dt-fold') as HTMLElement
-    // Closed by default, but the sections are IN the DOM: a reader checking a
-    // previous stage's evidence can always reach them.
-    expect(fold.getAttribute('data-open')).toBe('false')
-    expect(fold.textContent).toContain('其他区块')
-    expect(fold.textContent).toContain('进展流')
-    // Opening it flips the state.
-    fireEvent.click(fold.querySelector('.dt-fold-head') as HTMLElement)
-    expect(fold.getAttribute('data-open')).toBe('true')
+    await waitFor(() => expect(document.querySelectorAll('.plan-scenario').length).toBeGreaterThan(0))
+    const rows = [...document.querySelectorAll('.plan-scenario')]
+    // Every row carries a derived tone, and each one offers a way into layer two.
+    expect(rows.every((row) => row.getAttribute('data-tone') !== null)).toBe(true)
+    expect(document.querySelectorAll('.plan-scenario-open').length).toBe(rows.length)
+    // Nothing is folded away: the old page had a "其他区块" collapse.
+    expect(document.querySelectorAll('.dt-fold').length).toBe(0)
   })
 
-  it('leads a G0 pane with basic info and the G0 workbench', async () => {
-    const api = makeApi()
-    await renderPage(api)
-    // POC-2026-002 is the fixture's G0 project with nothing filled in.
-    openProject('某某集团办公网改造')
-    await waitFor(() => expect(document.querySelectorAll('.dt-stage-context').length).toBe(1))
-    expect(document.querySelector('.dt-stage-context')?.textContent).toContain('G0 工作台')
-    // A G0 pane opens on "who is this" and then the gate-0 work, not on a
-    // progress stream the project does not have.
-    const titles = [...document.querySelectorAll('.dt-pane .dsec-title')].map((node) => node.textContent)
-    expect(titles[0]).toBe('基本信息')
-    expect(titles[1]).toBe('G0 必填完整度')
-  })
-
-  it('says plainly when the current stage is not recorded as done', async () => {
+  it('closes the page with the next actions, spanning both columns', async () => {
     await renderPage(makeApi())
     openProject('某某制造产线安全接入')
-    await waitFor(() => expect(document.querySelectorAll('.dt-stage-context').length).toBe(1))
-    // The G4 fixture has stageDone all true, so the honest verdict is "done".
-    expect(document.querySelector('.dt-stage-context')?.getAttribute('data-done')).toBe('true')
-    expect(document.querySelector('.dt-stage-context-state')?.textContent).toBe('本阶段已记录完成')
+    // This fixture has an empty `outcome.business.milestone` and no progress
+    // `next`, so the block must say so rather than disappear: R11 ("achieved,
+    // nothing followed") is the ledger's highest-value gap, and a silently absent
+    // section is how it goes unnoticed.
+    await waitFor(() => expect(document.querySelectorAll('.dt-body').length).toBe(1))
+    const titles = [...document.querySelectorAll('.dsec-title')].map((node) => node.textContent)
+    expect(titles).toContain('下一步工作目标及计划')
+    const block = [...document.querySelectorAll('.dsec')]
+      .find((node) => node.querySelector('.dsec-title')?.textContent === '下一步工作目标及计划') as HTMLElement
+    expect(block.textContent).toContain('还没有下一步')
+    // It sits outside the two-column grid so it reads as the page's closing line.
+    expect(block.closest('.dt-columns')).toBeNull()
   })
 
-  it('turns an empty G0 into a worklist that names the fields to fill in', async () => {
-    // A project whose G0 checklist is genuinely incomplete: this is the shape
-    // most of the real ledger has (30/30 projects, five requirements missing).
-    const record = detail()
-    const bare: ProjectDetail = {
-      ...record,
-      summary: { ...record.summary, pocId: 'POC-2026-002', name: '某某集团办公网改造', stage: 'G0', stageLabel: 'G0-立项', closed: false },
-      gate0: {
-        ...record.gate0,
-        complete: false,
-        checklist: [
-          { field: 'why_customer', present: true, value: '办公网改造需求' },
-          { field: 'why_us', present: true, value: '标杆客户' },
-          { field: 'decision_chain', present: false, value: '' },
-          { field: 'post_poc_decision', present: false, value: '' },
-          { field: 'tech_owner', present: true, value: '王工' },
-        ],
-      },
-    }
-    await renderPage(makeApi({ detailRecord: bare }))
-    openProject('某某集团办公网改造')
-    await waitFor(() => expect(document.querySelectorAll('.worklist').length).toBe(1))
-    const worklist = document.querySelector('.worklist') as HTMLElement
-    // The worklist names the ACTUAL missing fields, not "five requirements missing".
-    expect(worklist.textContent).toContain('项目流程/决策链')
-    expect(worklist.textContent).toContain('测后客户决策')
-    // Present fields are not on the list.
-    expect(worklist.textContent).not.toContain('客户技术责任人')
-    // Every item is an edit instruction, so it carries an action verb.
-    const labels = [...worklist.querySelectorAll('.worklist-label')].map((node) => node.textContent ?? '')
-    expect(labels.length).toBeGreaterThanOrEqual(2)
-    expect(labels.every((label) => label.startsWith('补'))).toBe(true)
-  })
-
-  it('reads the same blockers the portfolio panel reports', async () => {
-    await renderPage(makeApi())
-    openProject('某某集团办公网改造')
-    await waitFor(() => expect(document.querySelectorAll('.worklist').length).toBe(1))
-    const worklist = document.querySelector('.worklist') as HTMLElement
-    // POC-2026-002 carries the `no-progress` blocker on the board, so the
-    // worklist must offer exactly that edit — not a re-derived guess.
-    expect(worklist.textContent).toContain('补第一条进展')
-  })
-
-  it('does not claim completeness when no snapshot has loaded', async () => {
-    // A detail page opened with no board must not say "nothing to fill in": the
-    // worklist cannot know that, and the G0 checklist is still authoritative.
+  it('shows the derived status of each criterion', async () => {
     await renderPage(makeApi())
     openProject('某某制造产线安全接入')
-    await waitFor(() => expect(document.querySelectorAll('.worklist').length).toBe(1))
-    // The G4 fixture has all G0 fields present, so here "done" IS correct.
-    expect(document.querySelector('.worklist')?.getAttribute('data-empty')).toBe('true')
-    expect(document.querySelector('.worklist')?.textContent).toContain('没有待补项')
+    await waitFor(() => expect(document.querySelectorAll('.plan-criteria').length).toBe(1))
+    const pills = [...document.querySelectorAll('.plan-criterion-status .status-pill')]
+    expect(pills.length).toBeGreaterThan(0)
+    // A criterion with no derived status reads as unverified, never as blank:
+    // an empty cell would be read as "fine".
+    expect(pills.every((pill) => (pill.textContent ?? '').trim() !== '')).toBe(true)
   })
 
   it('shows the customer name, which the Host sends but the page used to drop', async () => {
@@ -1040,60 +1003,71 @@ describe('detail page', () => {
     expect(decisions.textContent).toContain('还没有写清测完之后')
   })
 
-  it('shows the four dimensions as four separate summary cards', async () => {
+  it('renders Gate 0 as a card grid naming each question', async () => {
     await renderPage(makeApi())
     openProject('某某制造产线安全接入')
-    await waitFor(() => expect(document.querySelectorAll('.dim-card').length).toBe(4))
-    const cards = [...document.querySelectorAll('.dim-card')]
-    expect(cards.map((card) => (card as HTMLElement).dataset.present)).toEqual(['true', 'true', 'true', 'false'])
-    // The origin tag distinguishes a derived dimension from a hand-filled one.
-    expect(cards.map((card) => (card as HTMLElement).dataset.origin)).toEqual(['auto', 'manual', 'auto', 'manual'])
+    await waitFor(() => expect(document.querySelectorAll('.g0-card').length).toBe(6))
+    const cards = [...document.querySelectorAll('.g0-card')]
+    // The six cells are the six G0 questions, not a five-cell completeness meter:
+    // a meter could say how many were missing but not which one.
+    const labels = cards.map((card) => card.querySelector('.g0-card-label')?.textContent)
+    expect(labels).toContain('客户为什么测')
+    expect(labels).toContain('项目流程/决策链')
+    expect(labels).toContain('G0 Review')
+    // Presence is visible per cell, so an unanswered question is identifiable.
+    expect(cards.every((card) => card.getAttribute('data-present') !== null)).toBe(true)
   })
 
-  it('shows a project with nothing filled in as four missing dimensions', async () => {
+  it('marks an unanswered Gate 0 question instead of only counting it', async () => {
+    const record = detail()
     await renderPage(makeApi({
       detailRecord: {
-        ...detail(),
-        summary: { ...detail().summary, pocId: 'POC-2026-002', name: '某某集团办公网改造', dimensions: { achievement: false, evidence: false, recognition: false, nextMilestone: false }, dimensionCount: 0 },
-        outcome: { ...detail().outcome, achievement: '', customerRecognition: '', ourProof: '', milestone: '' },
-        progress: [],
+        ...record,
+        summary: { ...record.summary, pocId: 'POC-2026-002', name: '某某集团办公网改造', stage: 'G0', stageLabel: 'G0-立项', closed: false },
+        gate0: {
+          ...record.gate0,
+          complete: false,
+          decisionChain: '',
+          postPocDecision: '',
+          missing: ['decision_chain', 'post_poc_decision'],
+          checklist: [
+            { field: 'why_customer', present: true, value: '办公网改造需求' },
+            { field: 'why_us', present: true, value: '标杆客户' },
+            { field: 'decision_chain', present: false, value: '' },
+            { field: 'post_poc_decision', present: false, value: '' },
+            { field: 'tech_owner', present: true, value: '王工' },
+          ],
+        },
       },
     }))
     openProject('某某集团办公网改造')
-    await waitFor(() => expect(document.querySelectorAll('.dim-card').length).toBe(4))
-    expect([...document.querySelectorAll('.dim-card')].map((card) => (card as HTMLElement).dataset.present)).toEqual(['false', 'false', 'false', 'false'])
+    await waitFor(() => expect(document.querySelectorAll('.g0-card[data-present="false"]').length).toBe(3))
+    const missing = [...document.querySelectorAll('.g0-card[data-present="false"]')]
+    // Each unanswered card says "缺失" rather than rendering a blank cell.
+    expect(missing.every((card) => card.textContent?.includes('缺失'))).toBe(true)
   })
 
-  it('renders the five G0 prerequisites as one meter, including tech_owner', async () => {
-    await renderPage(makeApi())
-    openProject('某某制造产线安全接入')
-    await waitFor(() => expect(document.querySelectorAll('.g0-cell').length).toBe(5))
-    const cells = [...document.querySelectorAll('.g0-cell')]
-    expect(cells.map((cell) => (cell as HTMLElement).dataset.present)).toEqual(['true', 'true', 'true', 'true', 'true'])
-    // tech_owner lives in the identity block but still counts as one of the five.
-    expect(cells[4]?.textContent).toContain('客户技术责任人')
-  })
-
-  it('shows the progress stream newest-first, with evidence and recognition', async () => {
+  it('shows the progress stream newest-first as compact rows', async () => {
     await renderPage(makeApi())
     openProject('某某制造产线安全接入')
     await waitFor(() => expect(document.querySelectorAll('.prog-item').length).toBe(2))
     const items = [...document.querySelectorAll('.prog-item')]
     expect(items[0]?.textContent).toContain('2026/11/01')
-    expect(items[0]?.textContent).toContain('验收报告.pdf')
-    expect(items[0]?.textContent).toContain('认可')
     expect(items[1]?.textContent).toContain('2026/09/01')
-    // A linked evidence title is a real anchor, not a dead chip.
-    expect(items[0]?.querySelector('a[href="https://example.com/b"]')).not.toBeNull()
+    // The row carries the change marker and the result line; the proof behind a
+    // round belongs to the scenario drill-down, which is why this is a timeline
+    // rather than a full card.
+    expect(items[0]?.querySelector('.prog-change')).not.toBeNull()
+    expect(items[0]?.querySelector('.prog-actual-line')?.textContent).toContain('客户验收通过')
   })
 
-  it('marks an entry with no evidence and no next step explicitly', async () => {
+  it('cites scenarios by name on a progress row', async () => {
     await renderPage(makeApi())
     openProject('某某制造产线安全接入')
     await waitFor(() => expect(document.querySelectorAll('.prog-item').length).toBe(2))
-    const oldest = [...document.querySelectorAll('.prog-item')][1]!
-    expect(oldest.textContent).toContain('无证据')
-    expect(oldest.textContent).toContain('没有安排下一步')
+    const newest = document.querySelectorAll('.prog-item')[0]!
+    // The ledger stores `scn-01`; the timeline resolves it to words.
+    expect(newest.querySelector('.prog-scope-row')?.textContent).toContain('产线设备远程运维')
   })
 
   it('shows an explicit empty state when a project has no progress yet', async () => {
@@ -1114,15 +1088,15 @@ describe('detail page', () => {
   it('returns to the overview with the back button', async () => {
     await renderPage(makeApi())
     openProject('某某制造产线安全接入')
-    await waitFor(() => expect(screen.getByRole('button', { name: '← 返回' })).toBeTruthy())
-    fireEvent.click(screen.getByRole('button', { name: '← 返回' }))
+    await waitFor(() => expect(screen.getAllByRole('button', { name: '← 返回' }).length).toBeGreaterThan(0))
+    fireEvent.click(screen.getAllByRole('button', { name: '← 返回' })[0]!)
     await waitFor(() => expect(document.querySelectorAll('.pcard').length).toBe(3))
   })
 
   it('leaves the detail page with Escape', async () => {
     await renderPage(makeApi())
     openProject('某某制造产线安全接入')
-    await waitFor(() => expect(document.querySelectorAll('.dt-rail').length).toBe(1))
+    await waitFor(() => expect(document.querySelectorAll('.dt-header').length).toBe(1))
     fireEvent.keyDown(document.querySelector('.wd-shell') as HTMLElement, { key: 'Escape' })
     await waitFor(() => expect(document.querySelectorAll('.pcard').length).toBe(3))
   })
@@ -1177,13 +1151,17 @@ describe('bilingual copy', () => {
     expect(screen.getByText('Work Dashboard · read-only')).toBeTruthy()
     expect(screen.getAllByText('POC Operations').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Portfolio view').length).toBeGreaterThan(0)
-    // The four dimension labels stay four separate labels in English too, on the
-    // detail page where the v3 model renders them.
+    // The detail page's own blocks translate too: the fixed block set is the same
+    // in both locales, only the words change.
     // The API double only serves POC-2026-003's detail record.
     fireEvent.click([...document.querySelectorAll('.pcard')].find((card) => card.textContent?.includes('某某制造产线安全接入'))!)
-    await waitFor(() => expect(document.querySelectorAll('.dim-card').length).toBe(4))
-    const labels = [...document.querySelectorAll('.dim-card')].map((node) => node.querySelector('.dim-card-label')?.textContent)
-    expect(labels).toEqual(['Goal met', 'Evidence', 'Recognition', 'Next step'])
+    await waitFor(() => expect(document.querySelectorAll('.g0-card').length).toBe(6))
+    const labels = [...document.querySelectorAll('.g0-card-label')].map((node) => node.textContent)
+    // The G0 questions are the design's six cells; in English they must not fall
+    // back to the Chinese dictionary or to raw field names.
+    expect(labels).toContain('Why the customer tests')
+    expect(labels).toContain('Process / decision chain')
+    expect(screen.getAllByText('Success criteria').length).toBeGreaterThan(0)
   })
 })
 
