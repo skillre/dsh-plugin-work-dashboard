@@ -438,7 +438,9 @@ function PortfolioBand({ props }: { props: OverviewProps }): JSX.Element {
     label: `R${row.ruleNo} ${format(t(`gap.${row.rule}.title`), { ...(representative.get(row.rule)?.params ?? {}) })}`,
     value: row.count,
     display: format(t('gapRuleFiresLabel'), { count: row.count }),
-    tone: row.level === 'high' ? ('red' as const) : ('amber' as const),
+    // `info` is its own tier (R14): painting it amber would put a project that is
+    // merely waiting on the customer beside one that has no evidence at all.
+    tone: row.level === 'high' ? ('red' as const) : row.level === 'medium' ? ('amber' as const) : ('slate' as const),
   }))
 
   // The band is context, so it must not own the first screen: it collapses to

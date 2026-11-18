@@ -95,8 +95,24 @@ interface ProjectGroup {
   pocName: string
   stageLabel: string
   rows: BlockerRow[]
-  /** The worst level in the group, for the group's colour. */
-  level: 'high' | 'medium'
+  /**
+   * The worst level in the group, for the group's colour.
+   *
+   * `info` is a real tier as of v3.1 (R14: proof exists, the customer has not
+   * spoken yet). It must not promote to `medium`, or a normal waiting state would
+   * paint like a missed-evidence finding.
+   */
+  level: GapLevelLike
+}
+
+/** The three severities a group can carry, worst first. */
+type GapLevelLike = 'high' | 'medium' | 'info'
+
+/** Rank a level so the worst one wins when groups merge. */
+function levelRank(level: GapLevelLike): number {
+  if (level === 'high') return 3
+  if (level === 'medium') return 2
+  return 1
 }
 
 /**
@@ -121,7 +137,7 @@ function groupByProject(rows: BlockerRow[]): ProjectGroup[] {
       continue
     }
     existing.rows.push(row)
-    if (row.level === 'high') existing.level = 'high'
+    if (levelRank(row.level) > levelRank(existing.level)) existing.level = row.level
   }
   return [...groups.values()]
 }
@@ -269,13 +285,16 @@ export function Worklist({ detail, rows, t }: {
     // G0: name the actual fields, in schema order. This is the most concrete
     // instruction the page can give, so it comes first.
     const missing = detail.gate0.checklist.filter((item: Gate0CheckItem) => !item.present)
-    for (const item of missing) {
+    for (const [index, item] of missing.entries()) {
       const label = t(G0_WORK_LABEL[item.field] ?? item.field)
       next.push({
         key: `g0:${item.field}`,
         label: format(t('worklistG0Field'), { field: label }),
-        copy: t('worklistG0Intro', { count: String(missing.length) }),
-        action: t('worklistG0Hint'),
+        // The count is a fact about the group, not about this row: repeating it
+        // on all five lines turned the most actionable block on the page into a
+        // wall of identical sentences. It is said once, on the first row.
+        copy: index === 0 ? t('worklistG0Intro', { count: String(missing.length) }) : '',
+        action: index === 0 ? t('worklistG0Hint') : '',
       })
     }
 

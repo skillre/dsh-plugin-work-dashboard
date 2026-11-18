@@ -85,6 +85,85 @@ function riskTone(level: string): 'green' | 'amber' | 'red' | 'slate' {
   return 'slate'
 }
 
+/**
+ * The dictionary key for the ledger's derived `priority`.
+ *
+ * `priority` is a sort hint the ledger computes, not a decision, and it arrives
+ * as an English enum. Mapping it here keeps "high" out of a Chinese page without
+ * inventing a fourth tier the ledger does not have.
+ */
+function priorityLabelKey(priority: string): string {
+  if (priority === 'strategic') return 'priorityStrategic'
+  if (priority === 'high') return 'priorityHigh'
+  if (priority === 'normal') return 'priorityNormal'
+  return 'priorityUnknown'
+}
+
+/**
+ * Resolve a `scn-NN` id to the scenario's name, for display.
+ *
+ * The ledger stores the id, which is what keeps the reference stable across a
+ * rename. The reader still needs words, so the timeline resolves the id here and
+ * falls back to the raw id when the plan no longer defines it — showing a stale
+ * id is more honest than showing nothing.
+ */
+function scenarioNameOf(detail: ProjectDetail, id: string): string {
+  const found = detail.plan.scenarios.find((item) => item.id === id)
+  return found === undefined ? '' : found.name
+}
+
+/**
+ * The tone a derived scenario status earns.
+ *
+ * The colour IS the finding on this page: 无证据 is the one state that means
+ * "claimed, never backed", so it is the only red. 未开始 is grey rather than red
+ * because a scenario nobody has reached is a plan not yet executed, not a defect.
+ */
+function scenarioTone(status: string): 'green' | 'amber' | 'red' | 'slate' {
+  if (status === '已证明') return 'green'
+  if (status === '待客户确认') return 'amber'
+  if (status === '无证据') return 'red'
+  return 'slate'
+}
+
+/** The marker glyph for a scenario status; the text label carries the meaning. */
+function scenarioGlyph(status: string): string {
+  if (status === '已证明') return '●'
+  if (status === '待客户确认') return '◐'
+  if (status === '无证据') return '○'
+  return '—'
+}
+
+/** The tone a derived criterion status earns. */
+function criterionTone(status: string): 'green' | 'amber' | 'red' | 'slate' {
+  if (status === '已达成') return 'green'
+  if (status === '部分达成') return 'amber'
+  if (status === '未达成') return 'red'
+  return 'slate'
+}
+
+/**
+ * The dictionary suffix for each derived scenario status.
+ *
+ * Explicit rather than index-based: the ledger's enum values are Chinese prose,
+ * and a lookup that silently falls back would render a raw ledger word into an
+ * English page.
+ */
+const SCENARIO_STATUS_KEY: Record<string, string> = {
+  已证明: 'Proven',
+  待客户确认: 'Awaiting',
+  无证据: 'NoEvidence',
+  未开始: 'NotStarted',
+}
+
+/** The dictionary suffix for each derived criterion status. */
+const CRITERION_STATUS_KEY: Record<string, string> = {
+  已达成: 'Proven',
+  部分达成: 'Partial',
+  未达成: 'Failed',
+  未验证: 'Unverified',
+}
+
 /** The leading percentage in a completion string, or `null`. */
 function completionRatio(value: string): number | null {
   const match = value.match(/^(\d+(?:\.\d+)?)\s*%/u)
@@ -272,7 +351,11 @@ function IdentityRail({ props }: { props: DetailProps }): JSX.Element {
         <div className="dt-rail-pills">
           <span className="status-pill tone-blue"><span className="status-dot" />{summary.closed ? t('stageClosed') : summary.stageLabel === '' ? t('stageUnknown') : summary.stageLabel}</span>
           {summary.status === '' ? null : <span className="status-pill tone-slate">{summary.status}</span>}
-          {summary.priority === '' ? null : <span className="status-pill tone-amber">{summary.priority}</span>}
+          {summary.priority === '' ? null : (
+            <span className={`status-pill tone-${summary.priority === 'strategic' ? 'amber' : summary.priority === 'high' ? 'amber' : 'slate'}`}>
+              {t(priorityLabelKey(summary.priority))}
+            </span>
+          )}
         </div>
       </div>
 
@@ -331,7 +414,7 @@ function IdentityRail({ props }: { props: DetailProps }): JSX.Element {
           <RailMeta label={t('dtSponsorLabel')} value={detail.execSponsor} t={t} />
           <RailMeta label={t('type')} value={summary.pocType} t={t} />
           <RailMeta label={t('dtStageSinceLabel')} value={summary.stageSince === null ? '' : `${formatDate(summary.stageSince, locale)}${summary.daysInStage === null ? '' : ` · ${format(t('daysInStage'), { days: summary.daysInStage })}`}`} t={t} />
-          <RailMeta label={t('dtPriorityLabel')} value={summary.priority} t={t} />
+          <RailMeta label={t('dtPriorityLabel')} value={summary.priority === '' ? '' : t(priorityLabelKey(summary.priority))} t={t} />
         </div>
       </div>
 
@@ -345,7 +428,7 @@ function IdentityRail({ props }: { props: DetailProps }): JSX.Element {
 }
 
 /** One progress entry: the v3 core, as a card on a vertical stream. */
-function ProgressItem({ entry, index, t, locale }: { entry: ProgressView; index: number; t: Translate; locale: string }): JSX.Element {
+function ProgressItem({ entry, index, t, locale, detail }: { entry: ProgressView; index: number; t: Translate; locale: string; detail: ProjectDetail }): JSX.Element {
   const tone = recognitionTone(entry.customer.recognition)
   const ratio = completionRatio(entry.completion)
   const hasNext = entry.next.goal !== '' || entry.next.owner !== '' || entry.next.deadline !== ''
@@ -387,10 +470,17 @@ function ProgressItem({ entry, index, t, locale }: { entry: ProgressView; index:
           </div>
         )}
 
-        {entry.items.length === 0 ? null : (
+        {entry.scenarioIds.length === 0 ? null : (
           <div className="prog-scope">
             <span className="prog-scope-label">{t('dtProgressScope')}</span>
-            <div className="chip-row">{entry.items.map((item, itemIndex) => <span key={`${item}:${itemIndex}`} className="chip">{item}</span>)}</div>
+            {/* v3.1 cites scenarios by id. The name is resolved against the plan
+                so the timeline reads in words while the reference stays stable. */}
+            <div className="chip-row">
+              {entry.scenarioIds.map((id, itemIndex) => {
+                const linked = scenarioNameOf(detail, id)
+                return <span key={`${id}:${itemIndex}`} className="chip">{linked === '' ? id : linked}</span>
+              })}
+            </div>
           </div>
         )}
 
@@ -471,7 +561,7 @@ function ProgressStream({ detail, t, locale }: { detail: ProjectDetail; t: Trans
       ) : (
         <ol className="prog-stream">
           {ordered.map((entry, index) => (
-            <ProgressItem key={`${entry.date}:${entry.seq ?? index}`} entry={entry} index={index} t={t} locale={locale} />
+            <ProgressItem key={`${entry.date}:${entry.seq ?? index}`} entry={entry} index={index} t={t} locale={locale} detail={detail} />
           ))}
         </ol>
       )}
@@ -618,8 +708,146 @@ function BasicInfo({ detail, t }: { detail: ProjectDetail; t: Translate }): JSX.
   )
 }
 
+/**
+ * The second layer: everything that proves one scenario.
+ *
+ * This is deliberately not on the first screen. The overview answers "which
+ * scenarios are unproven"; the evidence, the customer's words and the G3 verdict
+ * are what you open once that question has pointed at a row. Putting them all on
+ * the overview was the design's original mistake: the page became a wall of proof
+ * in which the one red scenario was invisible.
+ *
+ * The evidence list is assembled from the progress entries that cite this
+ * scenario by id, so it can never disagree with the timeline above it.
+ */
+function ScenarioDetail({ detail, scenarioId, t }: { detail: ProjectDetail; scenarioId: string; t: Translate }): JSX.Element {
+  const scenario = detail.plan.scenarios.find((item) => item.id === scenarioId)
+  if (scenario === undefined) {
+    return (
+      <Section title={t('dtScenarioTitle')}>
+        <Blank text={t('dtScenarioNotFound')} />
+      </Section>
+    )
+  }
+  const tone = scenarioTone(scenario.status)
+  // Newest first, matching the timeline: the reader wants the current state of
+  // this scenario, not its history.
+  const entries = detail.progress
+    .filter((entry) => entry.scenarioIds.includes(scenarioId))
+    .slice()
+    .sort((left, right) => (right.date === left.date ? (right.seq ?? 0) - (left.seq ?? 0) : right.date.localeCompare(left.date)))
+
+  const evidence = entries.flatMap((entry) => entry.evidence.map((item) => ({ ...item, date: entry.date })))
+  const latestWithCustomer = entries.find((entry) => entry.customer.syncedWith !== '' || entry.customer.feedback !== '' || entry.customer.recognition !== '')
+  const latest = entries[0]
+
+  return (
+    <Section title={t('dtScenarioTitle')} kicker={scenario.name}>
+      <div className="sd-head" data-tone={tone}>
+        <span className="sd-head-no">{scenario.id}</span>
+        <span className="sd-head-name">{scenario.name === '' ? t('emptyField') : scenario.name}</span>
+        {scenario.status === '' ? null : (
+          <span className={`status-pill tone-${tone}`}>
+            <span className="status-dot" />
+            {t(`dtStatus${SCENARIO_STATUS_KEY[scenario.status] ?? 'NoEvidence'}`)}
+          </span>
+        )}
+      </div>
+
+      <div className="dt-prose" data-empty={scenario.goal === ''}>
+        <span className="dt-prose-label">{t('dtScenarioGoal')}</span>
+        <p className="dt-prose-body prose">{scenario.goal === '' ? t('emptyField') : scenario.goal}</p>
+      </div>
+
+      <div className="plan-block">
+        <header className="plan-block-head">
+          <h3 className="plan-block-title">{t('dtScenarioEvidence')}</h3>
+          <span className="plan-block-note">{format(t('dtPlanScenarioEvidence'), { count: evidence.length })}</span>
+        </header>
+        {evidence.length === 0 ? (
+          <Blank text={t('dtScenarioEvidenceNone')} />
+        ) : (
+          <ul className="sd-evidence">
+            {evidence.map((item, index) => (
+              <li key={`${item.title}:${index}`} className="sd-evidence-row">
+                <span className="sd-evidence-type">{item.type === '' ? t('dtUnset') : item.type}</span>
+                <span className="sd-evidence-title">{item.title === '' ? t('emptyField') : item.title}</span>
+                <span className="sd-evidence-date">{item.date}</span>
+                {item.link === '' ? null : (
+                  <a className="sd-evidence-link" href={item.link} target="_blank" rel="noreferrer noopener">{t('dtPlanScenarioDetail')}</a>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="plan-block">
+        <header className="plan-block-head">
+          <h3 className="plan-block-title">{t('dtScenarioCustomer')}</h3>
+        </header>
+        {latestWithCustomer === undefined ? (
+          <Blank text={t('dtScenarioFeedbackEmpty')} />
+        ) : (
+          <div className="sd-customer">
+            <span className="sd-customer-sync">
+              {t('dtScenarioSyncedWith')}：{latestWithCustomer.customer.syncedWith === '' ? t('dtUnset') : latestWithCustomer.customer.syncedWith}
+              <span className="sd-customer-date">{latestWithCustomer.date}</span>
+            </span>
+            <p className="sd-customer-feedback prose">{latestWithCustomer.customer.feedback === '' ? t('dtUnset') : latestWithCustomer.customer.feedback}</p>
+            <span className={`status-pill tone-${recognitionTone(latestWithCustomer.customer.recognition)}`}>
+              <span className="status-dot" />
+              {latestWithCustomer.customer.recognition === '' ? t('dtUnset') : latestWithCustomer.customer.recognition}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {latest === undefined ? null : (
+        <div className="plan-block">
+          <header className="plan-block-head">
+            <h3 className="plan-block-title">{t('dtScenarioGate3')}</h3>
+          </header>
+          <div className="sd-gate3">
+            <span className={`status-pill tone-${latest.gate3_1 === '可证明' ? 'green' : 'amber'}`}>
+              <span className="status-dot" />G3-1 {latest.gate3_1 === '' ? t('dtUnset') : latest.gate3_1}
+            </span>
+            <span className={`status-pill tone-${latest.gate3_2 === '已确认' ? 'green' : 'amber'}`}>
+              <span className="status-dot" />G3-2 {latest.gate3_2 === '' ? t('dtUnset') : latest.gate3_2}
+            </span>
+            {/* The pair only means something together: provable but unconfirmed is
+                exactly rule 10, so it is named here instead of left to inference. */}
+            {latest.gate3_1 === '可证明' && latest.gate3_2 !== '已确认' ? <span className="sd-gate3-note">R10</span> : null}
+          </div>
+        </div>
+      )}
+
+      <div className="plan-block">
+        <header className="plan-block-head">
+          <h3 className="plan-block-title">{t('dtScenarioLinked')}</h3>
+          <span className="plan-block-note">{format(t('dtProgressCountLabel'), { count: entries.length })}</span>
+        </header>
+        {entries.length === 0 ? (
+          <Blank text={t('dtScenarioLinkedNone')} />
+        ) : (
+          <ul className="sd-linked">
+            {entries.map((entry) => (
+              <li key={entry.seq ?? entry.date} className="sd-linked-row">
+                <span className="sd-linked-date">{entry.date}</span>
+                <span className="sd-linked-seq">#{entry.seq ?? '—'}</span>
+                <span className="sd-linked-change">{entry.change === '' ? t('dtUnset') : entry.change}</span>
+                <span className="sd-linked-actual">{entry.actual === '' ? t('emptyField') : entry.actual}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Section>
+  )
+}
+
 /** The plan: criteria table, numbered scenarios, risks with severity, prose meta. */
-function PlanPanels({ detail, t }: { detail: ProjectDetail; t: Translate }): JSX.Element {
+function PlanPanels({ detail, t, onOpenScenario }: { detail: ProjectDetail; t: Translate; onOpenScenario: (id: string) => void }): JSX.Element {
   const plan = detail.plan
   return (
     <Section title={t('dtPlanTitle')}>
@@ -665,17 +893,31 @@ function PlanPanels({ detail, t }: { detail: ProjectDetail; t: Translate }): JSX
                 <th>{t('dtPlanMetric')}</th>
                 <th>{t('dtPlanBaseline')}</th>
                 <th>{t('dtPlanTarget')}</th>
+                <th>{t('dtPlanCriteriaStatus')}</th>
               </tr>
             </thead>
             <tbody>
-              {plan.criteria.map((criterion, index) => (
-                <tr key={`${criterion.name}:${index}`}>
-                  <td className="plan-criterion-name">{criterion.name === '' ? t('emptyField') : criterion.name}</td>
-                  <td>{criterion.metric === '' ? t('emptyField') : criterion.metric}</td>
-                  <td className="plan-criterion-num">{criterion.baseline === '' ? '—' : criterion.baseline}</td>
-                  <td className="plan-criterion-target">{criterion.target === '' ? '—' : criterion.target}</td>
-                </tr>
-              ))}
+              {plan.criteria.map((criterion, index) => {
+                // An unset status reads as 未验证 rather than as blank: for a
+                // criterion, "nobody has shown this" is the accurate default, and
+                // an empty cell would be read as "fine".
+                const status = criterion.status
+                const tone = criterionTone(status)
+                return (
+                  <tr key={criterion.id === '' ? `${criterion.name}:${index}` : criterion.id}>
+                    <td className="plan-criterion-name">{criterion.name === '' ? t('emptyField') : criterion.name}</td>
+                    <td>{criterion.metric === '' ? t('emptyField') : criterion.metric}</td>
+                    <td className="plan-criterion-num">{criterion.baseline === '' ? '—' : criterion.baseline}</td>
+                    <td className="plan-criterion-target">{criterion.target === '' ? '—' : criterion.target}</td>
+                    <td className="plan-criterion-status">
+                      <span className={`status-pill tone-${tone}`}>
+                        <span className="status-dot" />
+                        {t(`dtCrit${CRITERION_STATUS_KEY[status] ?? 'Unverified'}`)}
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
@@ -690,12 +932,52 @@ function PlanPanels({ detail, t }: { detail: ProjectDetail; t: Translate }): JSX
           <Blank text={t('dtPlanScenariosNone')} />
         ) : (
           <ol className="plan-scenarios">
-            {plan.scenarios.map((scenario, index) => (
-              <li key={`${scenario}:${index}`} className="plan-scenario">
-                <span className="plan-scenario-no">{String(index + 1).padStart(2, '0')}</span>
-                <span className="plan-scenario-text">{scenario}</span>
-              </li>
-            ))}
+            {plan.scenarios.map((scenario, index) => {
+              const tone = scenarioTone(scenario.status)
+              // The derived status decides the row's colour, and it is also the
+              // only thing on this row that can be acted on: a red row is a
+              // scenario someone claimed and never backed.
+              return (
+                <li key={scenario.id === '' ? `${scenario.name}:${index}` : scenario.id} className="plan-scenario" data-tone={tone}>
+                  <span className="plan-scenario-no">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="plan-scenario-body">
+                    <span className="plan-scenario-name">{scenario.name === '' ? t('emptyField') : scenario.name}</span>
+                    {scenario.goal === '' ? null : (
+                      <span className="plan-scenario-goal">
+                        <span className="plan-scenario-goal-label">{t('dtPlanScenarioGoal')}</span>
+                        {scenario.goal}
+                      </span>
+                    )}
+                  </span>
+                  <span className="plan-scenario-tail">
+                    {scenario.status === '' ? null : (
+                      <>
+                        <span className="plan-scenario-glyph" aria-hidden="true">{scenarioGlyph(scenario.status)}</span>
+                        <span className={`status-pill tone-${tone}`}>
+                          <span className="status-dot" />
+                          {t(`dtStatus${SCENARIO_STATUS_KEY[scenario.status] ?? 'NoEvidence'}`)}
+                        </span>
+                        {scenario.evidenceCount === 0 ? null : (
+                          <span className="plan-scenario-evidence">{format(t('dtPlanScenarioEvidence'), { count: scenario.evidenceCount })}</span>
+                        )}
+                      </>
+                    )}
+                    {/* The entry point to layer two. Without it the detail view
+                        exists but nobody knows to look for it. */}
+                    {scenario.id === '' ? null : (
+                      <button
+                        type="button"
+                        className="plan-scenario-open"
+                        onClick={() => onOpenScenario(scenario.id)}
+                        aria-label={`${t('dtPlanScenarioDetail')}: ${scenario.name}`}
+                      >
+                        {t('dtPlanScenarioDetail')} ›
+                      </button>
+                    )}
+                  </span>
+                </li>
+              )
+            })}
           </ol>
         )}
       </div>
@@ -786,14 +1068,29 @@ export function DetailPage(props: DetailProps): JSX.Element {
   const stage = detail.summary.closed ? 'closed' : detail.summary.stage
   const skeleton = SKELETON_FOR[stage as SkeletonKey] ?? SKELETON_FOR.unknown
   const [foldOpen, setFoldOpen] = useState(false)
+  /**
+   * Which scenario is open, or `null` for the overview.
+   *
+   * Deliberately local state rather than a route: opening a scenario is a
+   * question asked of the current project ("why is this row red?"), and making
+   * it a URL would let a refresh land on a scenario of a project that has since
+   * been closed or renamed.
+   */
+  const [scenarioId, setScenarioId] = useState<string | null>(null)
 
-  /** One named section, so the skeleton can order them by key. */
+  /**
+   * One named section, so the skeleton can order them by key.
+   *
+   * A scenario open replaces the reading pane rather than appending to it: the
+   * detail is a drill-down, and leaving the full plan above it would bury the
+   * evidence the reader came for.
+   */
   const sections: Record<SectionKey, JSX.Element> = {
     basic: <BasicInfo key="basic" detail={detail} t={t} />,
     progress: <ProgressStream key="progress" detail={detail} t={t} locale={locale} />,
     dimensions: <DimensionGrid key="dimensions" detail={detail} t={t} />,
     gate0: <Gate0Meter key="gate0" detail={detail} t={t} />,
-    plan: <PlanPanels key="plan" detail={detail} t={t} />,
+    plan: <PlanPanels key="plan" detail={detail} t={t} onOpenScenario={setScenarioId} />,
     outcome: <OutcomePanel key="outcome" detail={detail} t={t} />,
   }
 
@@ -805,6 +1102,22 @@ export function DetailPage(props: DetailProps): JSX.Element {
   // The worklist reads the same blocker rows the portfolio panel does, narrowed
   // to this project, so the two can never disagree about what is missing.
   const projectBlockers = props.blockers ?? []
+
+  // A scenario drill-down owns the reading pane while it is open. The rail stays,
+  // because the identity of the project is the context the evidence is read in.
+  if (scenarioId !== null) {
+    return (
+      <div className="dt-page">
+        <IdentityRail props={props} />
+        <main className="dt-pane">
+          <button type="button" className="sd-back" onClick={() => setScenarioId(null)}>
+            {t('dtScenarioBack')}
+          </button>
+          <ScenarioDetail detail={detail} scenarioId={scenarioId} t={t} />
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="dt-page">
