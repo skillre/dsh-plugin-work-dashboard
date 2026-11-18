@@ -76,11 +76,23 @@ export const GAP_RULES = Object.freeze([
   'R10-g3-1-without-g3-2',
   'R11-no-next-milestone',
   'R12-stage-stalled',
+  // v3.1 state rules: a plan that is the right shape but unexecuted.
+  'R13-scenario-no-evidence',
+  'R14-scenario-awaiting-customer',
+  'R15-criteria-unverified',
+  'R16-scenario-not-started',
 ] as const)
 export type GapRule = (typeof GAP_RULES)[number]
 
-/** Severity a gap carries; `high` sorts first and paints red. */
-export type GapLevel = 'high' | 'medium'
+/**
+ * Severity a gap carries.
+ *
+ * `high` sorts first and paints red, `medium` is amber, and `info` is the
+ * deliberate "this is true but not urgent" tier the ledger introduced for R14: a
+ * scenario waiting on the customer is a status, not a fault. Collapsing it into
+ * `medium` would put a normal state on the same list as missed evidence.
+ */
+export type GapLevel = 'high' | 'medium' | 'info'
 
 /** One evidence artefact attached to a progress entry. */
 export interface EvidenceRecord {
@@ -89,12 +101,58 @@ export interface EvidenceRecord {
   type?: string | null
 }
 
-/** One success criterion (`plan.criteria[]`). */
+/**
+ * One success criterion (`plan.criteria[]`).
+ *
+ * v3.1 gives every criterion a stable `id` and a derived `status`. The id is what
+ * a progress entry cites in `criteria_ids`; the status is written by the ledger's
+ * `tools/derive.mjs`, so it is read here, never computed.
+ */
 export interface CriterionRecord {
+  id?: string | null
   name?: string | null
   metric?: string | null
   baseline?: string | number | null
   target?: string | number | null
+  /** Derived by the ledger: 已达成 / 部分达成 / 未达成 / 未验证. */
+  status?: string | null
+}
+
+/**
+ * One test scenario (`plan.scenarios[]`).
+ *
+ * v3.1 promoted this from a bare string to an object with a stable `id`, because
+ * evidence is attached by id: renaming a scenario must not orphan its proof. The
+ * three derived fields are written by the ledger, not by this plugin.
+ */
+export interface ScenarioRecord {
+  /** Stable `scn-NN`; unique within the project and never reused. */
+  id?: string | null
+  name?: string | null
+  goal?: string | null
+  /** Derived by the ledger: 已证明 / 待客户确认 / 无证据 / 未开始. */
+  status?: string | null
+  /** Derived by the ledger: total evidence items across citing progress entries. */
+  evidence_count?: number | null
+  /** Derived by the ledger: the recognition recorded by the deciding round. */
+  recognition?: string | null
+}
+
+/**
+ * One gate transition (`gate_decisions[]`).
+ *
+ * Without it a promotion is just `stage` becoming a different string: months
+ * later nobody can say who decided, or on what basis.
+ */
+export interface GateDecisionRecord {
+  from?: string | null
+  to?: string | null
+  decided_at?: string | null
+  decided_by?: string | null
+  /** `human` or `agent-suggested`. */
+  basis?: string | null
+  signals_ref?: string | null
+  note?: string | null
 }
 
 /** One tracked risk (`plan.risks[]`). */
@@ -104,13 +162,26 @@ export interface RiskRecord {
   mitigation?: string | null
 }
 
-/** One progress entry (`progress[]`) — the centre of the v3 model. */
+/**
+ * One progress entry (`progress[]`) — the centre of the v3 model.
+ *
+ * v3.1 shape. `items` is gone: a progress entry cites scenarios and criteria by
+ * id, and carries a mandatory `change` naming what moved since the previous
+ * entry. A file still using `items` is a schema error in the ledger, not a
+ * variant to tolerate here — reading it as "no scenario links" would silently
+ * demote every scenario from 已证明 back to 未开始.
+ */
 export interface ProgressRecord {
   seq?: number | null
   date?: string | null
   type?: string | null
+  /** Mandatory in v3.1: what changed compared to the previous entry. */
+  change?: string | null
   goal?: string | null
-  items?: (string | null)[] | null
+  /** `scn-NN` ids. Names are not accepted by the ledger. */
+  scenario_ids?: (string | null)[] | null
+  /** `cri-NN` ids; independent of `scenario_ids`. */
+  criteria_ids?: (string | null)[] | null
   actual?: string | null
   completion?: string | null
   evidence?: EvidenceRecord[] | null
@@ -150,7 +221,8 @@ export interface PlanRecord {
   customer_pain?: string | null
   expected_recognition?: string | null
   criteria?: CriterionRecord[] | null
-  scenarios?: (string | null)[] | null
+  /** v3.1: objects with stable ids, not bare strings. */
+  scenarios?: ScenarioRecord[] | null
   our_edge?: string | null
   timeline?: { start?: string | null; end?: string | null } | null
   risks?: RiskRecord[] | null
@@ -199,6 +271,11 @@ export interface OrgRecord {
  * absence into a finding.
  */
 export interface PocRecord {
+  /**
+   * The data-shape version, fixed `"3.1"`. A file without it is a v3.0 record
+   * and is handled as a degraded, read-only shape.
+   */
+  schema_version?: string | null
   poc_id?: string | null
   name?: string | null
   org?: OrgRecord | null
@@ -212,6 +289,8 @@ export interface PocRecord {
   stage?: string | null
   status?: string | null
   stage_since?: string | null
+  /** v3.1: the audit trail of every gate promotion. */
+  gate_decisions?: GateDecisionRecord[] | null
   gate0?: Gate0Record | null
   plan?: PlanRecord | null
   progress?: ProgressRecord[] | null
@@ -449,8 +528,32 @@ export interface Snapshot {
    * disagree after a refresh, and the Client already holds the whole snapshot.
    */
   blockers: BlockerBoard
+  /**
+   * Which judgement the findings in this snapshot were computed under.
+   *
+   * `source: 'fallback'` means the cache carried no `config/rules.yaml`, so the
+   * thresholds are this plugin's built-in copy rather than the ledger's. That is
+   * a usable state but not a trustworthy one: the ledger may have tuned a
+   * threshold, and reporting "no findings" under the wrong thresholds is exactly
+   * the silent drift the ledger's single-source rule exists to prevent.
+   */
+  rules: RulesProvenance
   /** Non-fatal findings: unreadable files, unparsable YAML, duplicates. */
   warnings: string[]
+}
+
+/** Where this snapshot's thresholds and judgement came from. */
+export interface RulesProvenance {
+  /** `ledger` when `config/rules.yaml` was read, `fallback` when it was absent. */
+  source: 'ledger' | 'fallback'
+  /** `config/rules.yaml#version`, or empty under fallback. */
+  rulesVersion: string
+  /** The data-shape version from `config/enums`/projects, when known. */
+  schemaVersion: string
+  /** `true` when at least one project file declares `schema_version: "3.1"`. */
+  schemaCurrent: boolean
+  /** The staleness limits in force, from `config/health.yaml`. */
+  healthSource: 'ledger' | 'fallback'
 }
 
 /** One progress entry as the detail page receives it: every field present. */
@@ -458,8 +561,13 @@ export interface ProgressView {
   seq: number | null
   date: string
   type: string
+  /** v3.1: what moved compared to the previous entry. */
+  change: string
   goal: string
-  items: string[]
+  /** `scn-NN` ids, as written in the ledger. */
+  scenarioIds: string[]
+  /** `cri-NN` ids, independent of `scenarioIds`. */
+  criteriaIds: string[]
   actual: string
   completion: string
   evidence: Array<{ title: string; link: string; type: string }>
@@ -519,11 +627,32 @@ export interface Gate0View {
 }
 
 /** The plan block as the detail page receives it. */
+/** One criterion as the client renders it, carrying the ledger's derived status. */
+export interface CriterionView {
+  id: string
+  name: string
+  metric: string
+  baseline: string
+  target: string
+  status: string
+}
+
+/** One scenario as the client renders it, carrying the ledger's derived state. */
+export interface ScenarioView {
+  id: string
+  name: string
+  goal: string
+  /** 已证明 / 待客户确认 / 无证据 / 未开始; empty when the ledger did not derive it. */
+  status: string
+  evidenceCount: number
+  recognition: string
+}
+
 export interface PlanView {
   customerPain: string
   expectedRecognition: string
-  criteria: Array<{ name: string; metric: string; baseline: string; target: string }>
-  scenarios: string[]
+  criteria: CriterionView[]
+  scenarios: ScenarioView[]
   ourEdge: string
   timelineStart: string
   timelineEnd: string

@@ -13,6 +13,22 @@
  * 3. **A refresh is exclusive.** One lock file keeps two console instances in
  *    the same DSH home from cloning into the same directory at once.
  *
+ * ## The ledger has three sources, not one
+ *
+ * As of schema 3.1 the repository publishes three distinct things, and they fail
+ * independently:
+ *
+ * - `projects/*.yaml` — the facts. Absence is an error: without it there is no
+ *   console at all.
+ * - `config/*.yaml` — the judgement (thresholds, rule metadata, staleness
+ *   limits). Absence is a **stale cache**, not a failure: the plugin falls back
+ *   to its built-in numbers and says so.
+ * - `signals/*.yaml` — the agent's conclusions. Absence is normal: most projects
+ *   have none, and a signal is an opinion rather than a fact.
+ *
+ * Treating all three the same would either refuse to render a perfectly usable
+ * older cache, or silently present fallback thresholds as the ledger's.
+ *
  * Authentication is deliberately never stored: the token is read from the
  * already-authenticated `gh` CLI at call time and passed to git through an
  * environment-scoped `http.extraheader`, so it never lands in `.git/config`,
@@ -469,5 +485,88 @@ export class RepoCache {
       throw new RepoError('too-large', `${path} is larger than ${MAX_YAML_BYTES} bytes and was skipped.`, { path, size: info.size })
     }
     return readFile(path, 'utf8')
+  }
+
+  /**
+   * The ledger's `config/rules.yaml`, or `null` when the cache predates it.
+   *
+   * Returning `null` rather than throwing is deliberate: a cache cloned before
+   * the ledger added `config/` is a stale cache, not a broken one, and the caller
+   * falls back to the built-in thresholds while saying so.
+   */
+  async readRules(): Promise<string | null> {
+    return this.readConfigFile('rules.yaml')
+  }
+
+  /**
+   * The ledger's `config/derive.yaml`.
+   *
+   * Declares which derived fields the ledger stores and which are computed at
+   * read time. The plugin needs it to honour the same split: a stored value is a
+   * pure function of the record, a computed one depends on the clock and must
+   * never be shown as though it were written down.
+   */
+  async readDerive(): Promise<string | null> {
+    return this.readConfigFile('derive.yaml')
+  }
+
+  /**
+   * The ledger's `config/health.yaml`.
+   *
+   * Holds two separate staleness notions — facts (nothing happened) and judgment
+   * (nobody looked) — that fail for different reasons and must not be collapsed.
+   */
+  async readHealth(): Promise<string | null> {
+    return this.readConfigFile('health.yaml')
+  }
+
+  /** One file from `config/`, or `null` when absent or unreasonably large. */
+  private async readConfigFile(name: string): Promise<string | null> {
+    return this.readOptionalFile(join(this.repoPath, 'config', name))
+  }
+
+  /**
+   * The agent conclusions under `signals/`, keyed by `poc_id`.
+   *
+   * A signal is an opinion, not a fact: it is written only by the agent account,
+   * and the ledger's own README requires consumers to degrade gracefully when a
+   * field is missing or the directory does not exist yet. A malformed signal
+   * therefore becomes a warning and is skipped — it must never fail the page that
+   * shows the human facts.
+   */
+  async signalFiles(): Promise<Map<string, string>> {
+    const dir = join(this.repoPath, 'signals')
+    let names: string[]
+    try {
+      names = await readdir(dir)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return new Map()
+      throw error
+    }
+    const found = new Map<string, string>()
+    for (const name of names.filter((entry) => entry.endsWith('.yaml') || entry.endsWith('.yml')).sort()) {
+      const source = await this.readOptionalFile(join(dir, name))
+      if (source === null) continue
+      found.set(name.replace(/\.ya?ml$/, ''), source)
+    }
+    return found
+  }
+
+  /**
+   * Read a file that is allowed not to exist.
+   *
+   * `null` means "this cache does not carry it", which callers translate into a
+   * degraded-but-usable state. Only `ENOENT` is treated that way: a permission
+   * error is a real problem and must surface.
+   */
+  private async readOptionalFile(path: string): Promise<string | null> {
+    try {
+      const info = await stat(path)
+      if (info.size > MAX_YAML_BYTES) return null
+      return await readFile(path, 'utf8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw error
+    }
   }
 }

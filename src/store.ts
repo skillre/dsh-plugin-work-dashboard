@@ -26,6 +26,10 @@ import {
   scanGaps,
   text,
 } from './gap.js'
+import type { ScanOptions } from './gap.js'
+import { parseRules } from './rules.js'
+import { parseHealthConfig, parseSignals } from './signals.js'
+import type { RulesBundle } from './rules.js'
 import { buildBlockerBoard } from './blockers.js'
 import type { RepoCache } from './repo.js'
 import { RepoError } from './repo.js'
@@ -51,7 +55,13 @@ import type {
 /** Injected clock so the store stays testable and the rules stay pure. */
 export interface StoreOptions {
   now: () => Date
-  /** Days in one stage after which rule 12 fires. */
+  /**
+   * Days in one stage after which rule 12 fires.
+   *
+   * Retained as an explicit override for tests and for the plugin config; when a
+   * rules bundle is available its `stallDays` wins, because the ledger owns the
+   * threshold and the plugin must not disagree with CI.
+   */
   stallDays: number
 }
 
@@ -109,6 +119,17 @@ export class PocStore {
     return { records, warnings }
   }
 
+  /**
+   * The rules in force, read from the ledger's `config/rules.yaml`.
+   *
+   * A missing file is reported through `RulesBundle.source === 'fallback'`, not
+   * thrown: an older cache must still render, it just must not pretend its
+   * thresholds are the ledger's.
+   */
+  async rules(): Promise<RulesBundle> {
+    return parseRules(await this.cache.readRules())
+  }
+
   /** The overview snapshot; never throws for a missing cache, it reports it. */
   async snapshot(): Promise<Snapshot> {
     const cacheReady = await this.cache.isReady()
@@ -124,15 +145,28 @@ export class PocStore {
         gaps: [],
         analysis: emptyAnalysis(),
         blockers: buildBlockerBoard([], { now: this.options.now(), stallDays: this.options.stallDays }),
+        rules: {
+          source: 'fallback',
+          rulesVersion: '',
+          schemaVersion: '',
+          schemaCurrent: false,
+          healthSource: 'fallback',
+        },
         warnings: [],
       }
     }
     const { records, warnings } = await this.load()
     const now = this.options.now()
-    const projects = records.map((record) => summarize(record, now, this.options.stallDays))
+    // The ledger owns the thresholds, so its rules file wins over the configured
+    // `stallDays`. The fallback keeps a stale cache renderable while flagging it.
+    const rules = await this.rules()
+    const health = parseHealthConfig(await this.cache.readHealth())
+    const signals = parseSignals(await this.cache.signalFiles())
+    const scanOptions = { now, stallDays: rules.thresholds.stallDays, rules }
+    const projects = records.map((record) => summarize(record, now, scanOptions))
     const gaps: GapItem[] = []
     for (const record of records) {
-      gaps.push(...scanGaps(record, { now, stallDays: this.options.stallDays }))
+      gaps.push(...scanGaps(record, scanOptions))
     }
     gaps.sort(compareGaps)
     const sorted = projects.sort(compareProjects)
@@ -145,8 +179,15 @@ export class PocStore {
       stats: computeStats(sorted),
       gaps,
       analysis: analyse(sorted, gaps),
-      blockers: buildBlockerBoard(records, { now, stallDays: this.options.stallDays }),
-      warnings,
+      blockers: buildBlockerBoard(records, scanOptions),
+      rules: {
+        source: rules.source,
+        rulesVersion: rules.rulesVersion,
+        schemaVersion: schemaVersionOf(records),
+        schemaCurrent: records.some((record) => text(record.schema_version) === '3.1'),
+        healthSource: health.source,
+      },
+      warnings: [...warnings, ...rules.warnings, ...health.warnings, ...signals.warnings],
     }
   }
 
@@ -157,7 +198,9 @@ export class PocStore {
     const record = records.find((candidate) => text(candidate.poc_id) === pocId)
     if (record === undefined) return null
     const now = this.options.now()
-    const summary = summarize(record, now, this.options.stallDays)
+    const rules = await this.rules()
+    const scanOptions: ScanOptions = { now, stallDays: rules.thresholds.stallDays, rules }
+    const summary = summarize(record, now, scanOptions)
     const gate0 = record.gate0 ?? {}
     const plan = record.plan ?? {}
     const outcome = record.outcome ?? {}
@@ -196,12 +239,21 @@ export class PocStore {
         customerPain: text(plan.customer_pain),
         expectedRecognition: text(plan.expected_recognition),
         criteria: (plan.criteria ?? []).map((item) => ({
+          id: text(item?.id),
           name: text(item?.name),
           metric: text(item?.metric),
           baseline: text(item?.baseline),
           target: text(item?.target),
+          status: text(item?.status),
         })),
-        scenarios: (plan.scenarios ?? []).map(text).filter((item) => item !== ''),
+        scenarios: (plan.scenarios ?? []).map((item) => ({
+          id: text(item?.id),
+          name: text(item?.name),
+          goal: text(item?.goal),
+          status: text(item?.status),
+          evidenceCount: numberOrNull(item?.evidence_count) ?? 0,
+          recognition: text(item?.recognition),
+        })),
         ourEdge: text(plan.our_edge),
         timelineStart: text(plan.timeline?.start),
         timelineEnd: text(plan.timeline?.end),
@@ -218,8 +270,10 @@ export class PocStore {
         seq: numberOrNull(entry?.seq),
         date: text(entry?.date),
         type: text(entry?.type),
+        change: text(entry?.change),
         goal: text(entry?.goal),
-        items: (entry?.items ?? []).map(text).filter((item) => item !== ''),
+        scenarioIds: (entry?.scenario_ids ?? []).map(text).filter((item) => item !== ''),
+        criteriaIds: (entry?.criteria_ids ?? []).map(text).filter((item) => item !== ''),
         actual: text(entry?.actual),
         completion: text(entry?.completion),
         evidence: (entry?.evidence ?? []).map((item) => ({
@@ -255,9 +309,34 @@ export class PocStore {
         overall: text(outcome.overall),
         reviewedAt: text(outcome.reviewed_at),
       },
-      gaps: scanGaps(record, { now, stallDays: this.options.stallDays }),
+      gaps: scanGaps(record, scanOptions),
     }
   }
+}
+
+/**
+ * The most common declared `schema_version` across the records.
+ *
+ * The ledger states one shape version for the whole repository, so a mixed set
+ * means the cache is mid-migration. Reporting the majority keeps the UI honest
+ * without claiming uniformity it cannot prove.
+ */
+function schemaVersionOf(records: readonly PocRecord[]): string {
+  const counts = new Map<string, number>()
+  for (const record of records) {
+    const version = text(record.schema_version)
+    if (version === '') continue
+    counts.set(version, (counts.get(version) ?? 0) + 1)
+  }
+  let best = ''
+  let bestCount = 0
+  for (const [version, count] of counts) {
+    if (count > bestCount || (count === bestCount && version > best)) {
+      best = version
+      bestCount = count
+    }
+  }
+  return best
 }
 
 /** File name without its directory, for warning text. */
@@ -281,10 +360,10 @@ function progressSummary(poc: PocRecord): string {
 }
 
 /** Collapse one record into the table row the overview renders. */
-function summarize(record: PocRecord, now: Date, stallDays: number): ProjectSummary {
+function summarize(record: PocRecord, now: Date, scanOptions: ScanOptions): ProjectSummary {
   const dimensions = readDimensions(record)
   const { stage, closed } = normalizeStage(record.stage)
-  const gaps = scanGaps(record, { now, stallDays })
+  const gaps = scanGaps(record, scanOptions)
   const gate0 = record.gate0 ?? {}
   const activity = lastProgressDate(record)
   const stageSince = text(record.stage_since)
