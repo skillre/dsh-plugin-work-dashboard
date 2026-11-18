@@ -1,0 +1,145 @@
+schema_version: "3.1"
+poc_id: FIX-G2
+name: 夹具 · G2 方案验证（计划齐备，刚开始测）
+org:
+  system: 人保体系
+  company: 人保财险
+  department: 信息技术部
+amount_wan: 800
+poc_type: 大体量项目
+priority: high
+owner: 靳承德
+sales: 林鹤
+tech_owner: 李国新
+exec_sponsor: 陈总
+stage: G2-方案验证
+status: 进行中
+stage_since: 2026-10-20
+gate0:
+  why_customer: 等保 2.0 复测在即，现有设备吞吐与日志留存均不达标，需在信创替换前一并验证。
+  why_us: 把上网行为管理品类保持在深信服范围内，同时消除分公司对性能的抱怨。下一步：完成面向总公司的立项测试。
+  decision_chain: 技术验证 → 信息中心评审 → 采购立项（张总）
+  post_poc_decision: 通过则纳入 2027 Q1 信创替换预算，覆盖 3 个数据中心。
+  competitor: 奇安信、自研产品线
+  review:
+    conclusion: 通过
+    reviewer: 靳承德
+    reviewed_at: 2026-10-18
+  missing: []
+  complete: true
+plan:
+  customer_pain: 现有设备在 5000 人规模下吞吐不足，日志只留 30 天不合规。
+  expected_recognition: 客户信息中心书面认可达标，并同意进入采购立项。
+  criteria:
+  - id: cri-01
+    name: 5000 人并发接入稳定运行
+    metric: 成功率
+    baseline: null
+    target: ">=99.5%"
+    status: 未验证
+  - id: cri-02
+    name: 日志留存合规
+    metric: 留存天数
+    baseline: 30 天
+    target: ">=180 天"
+    status: 未验证
+  - id: cri-03
+    name: 终端兼容覆盖
+    metric: 覆盖终端比例
+    baseline: 62%
+    target: ">=95%"
+    status: 未验证
+  scenarios:
+  - id: scn-01
+    name: 办公网远程接入
+    goal: 5000 人并发下成功率 ≥ 99.5%，稳定运行 7 天
+    status: 无证据
+    evidence_count: 0
+    recognition: ""
+  - id: scn-02
+    name: 出差移动接入
+    goal: 弱网环境下接入成功率 ≥ 95%，首包 < 3s
+    status: 未开始
+    evidence_count: 0
+    recognition: ""
+  - id: scn-03
+    name: 日志检索与留存
+    goal: 6 个月日志 10 秒内可检索，留存 ≥ 180 天
+    status: 未开始
+    evidence_count: 0
+    recognition: ""
+  our_edge: 零信任架构与自研日志引擎
+  timeline:
+    start: 2026-10-20
+    end: 2026-12-31
+  risks:
+  - name: 现有设备吞吐不足，压测环境与生产存在差异
+    level: high
+    mitigation: 先在分公司搭镜像环境预演
+  - name: 客户 Q4 采购预算收紧，立项时间可能推迟
+    level: medium
+    mitigation: 提前锁定预算窗口
+  report_nodes:
+  - 阶段一汇报
+  - 阶段二汇报
+  gate1:
+    conclusion: 通过
+    reviewed_at: 2026-10-19
+  gate2:
+    ready: Ready
+    checked_at: 2026-10-20
+    prerequisites:
+    - 测试环境就绪
+    - 客户技术接口人确认
+progress:
+- seq: 1
+  date: 2026-10-21
+  type: 客户阶段同步
+  change: 阶段推进
+  goal: 完成 G2 启动会并确认测试环境
+  scenario_ids: []
+  criteria_ids: []
+  actual: 客户确认测试环境与接口人，约定本周开始压测
+  completion: "25%"
+  evidence: []
+  customer:
+    synced_with: 李国新
+    feedback: 环境已就绪
+    recognition: 待确认
+  gate3_1: 待补证据
+  gate3_2: 待确认
+  next:
+    goal: 完成 5000 人并发压测
+    owner: 张三
+    deadline: 2026-11-15
+outcome:
+  achievement: null
+  customer_recognition: 待确认
+  our_proof: null
+  remaining_risks: null
+  conclusion:
+    proved: null
+    recognized: null
+    next_business: null
+  business:
+    milestone: null
+    owner: null
+    deadline: null
+    status: null
+  overall: null
+  reviewed_at: null
+gate_decisions:
+- from: G0-立项
+  to: G1-方案设计
+  decided_at: 2026-10-18
+  decided_by: 靳承德
+  basis: human
+  signals_ref: null
+  note: 五必填补齐
+- from: G1-方案设计
+  to: G2-方案验证
+  decided_at: 2026-10-20
+  decided_by: 靳承德
+  basis: human
+  signals_ref: null
+  note: 前置条件就绪

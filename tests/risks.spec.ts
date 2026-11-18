@@ -20,7 +20,7 @@ const BASE: PocRecord = {
   name: '某某银行零信任试点',
   stage: 'G2-方案验证',
   gate0: { missing: [], complete: true, review: { conclusion: '通过' } },
-  plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: ['s1', 's2', 's3'], risks: [] },
+  plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: [{ id: 'scn-01', name: 's1' }, { id: 'scn-02', name: 's2' }, { id: 'scn-03', name: 's3' }], risks: [] },
   progress: [],
   outcome: {},
 }
@@ -85,7 +85,7 @@ describe('board assembly', () => {
       poc_id: 'P-9',
       amount_wan: 1500,
       gate0: { missing: [], review: {} },
-      plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: ['s1', 's2', 's3'], risks: [{ name: 'r', level: 'medium' }] },
+      plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: [{ id: 'scn-01', name: 's1' }, { id: 'scn-02', name: 's2' }, { id: 'scn-03', name: 's3' }], risks: [{ name: 'r', level: 'medium' }] },
     }
     const board = buildRiskBoard([record], OPTIONS)
     expect(board.rows[0]?.gapCount).toBeGreaterThan(0)

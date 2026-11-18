@@ -1,0 +1,70 @@
+schema_version: "3.1"
+poc_id: FIX-G0
+name: 夹具 · G0 立项阶段（全空态）
+org:
+  system: 人保体系
+  company: 人保财险
+  department: null
+amount_wan: 500
+poc_type: 大体量项目
+priority: high
+owner: 靳承德
+sales: 林鹤
+tech_owner: null
+exec_sponsor: null
+stage: G0-立项
+status: 进行中
+stage_since: 2026-11-10
+gate0:
+  why_customer: null
+  why_us: null
+  decision_chain: null
+  post_poc_decision: null
+  competitor: null
+  review:
+    conclusion: 待评审
+    reviewer: 靳承德
+    reviewed_at: null
+  missing:
+  - why_customer
+  - why_us
+  - decision_chain
+  - post_poc_decision
+  - tech_owner
+  complete: false
+plan:
+  customer_pain: null
+  expected_recognition: null
+  criteria: []
+  scenarios: []
+  our_edge: null
+  timeline:
+    start: null
+    end: null
+  risks: []
+  report_nodes: []
+  gate1:
+    conclusion: null
+    reviewed_at: null
+  gate2:
+    ready: null
+    checked_at: null
+    prerequisites: []
+progress: []
+outcome:
+  achievement: null
+  customer_recognition: null
+  our_proof: null
+  remaining_risks: null
+  conclusion:
+    proved: null
+    recognized: null
+    next_business: null
+  business:
+    milestone: null
+    owner: null
+    deadline: null
+    status: null
+  overall: null
+  reviewed_at: null
+gate_decisions: []

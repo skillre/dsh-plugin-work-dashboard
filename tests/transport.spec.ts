@@ -51,6 +51,13 @@ const SNAPSHOT: Snapshot = {
     projectsBlocked: 0,
     projectsTotal: 0,
   },
+  rules: {
+    source: 'fallback',
+    rulesVersion: '',
+    schemaVersion: '',
+    schemaCurrent: false,
+    healthSource: 'fallback',
+  },
   warnings: [],
 }
 

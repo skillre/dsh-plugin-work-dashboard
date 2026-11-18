@@ -28,7 +28,7 @@ const HEALTHY: PocRecord = {
   gate0: { missing: [], complete: true, review: { conclusion: '通过' } },
   plan: {
     criteria: [{ name: 'a' }, { name: 'b' }],
-    scenarios: ['s1', 's2', 's3'],
+    scenarios: [{ id: 'scn-01', name: 's1' }, { id: 'scn-02', name: 's2' }, { id: 'scn-03', name: 's3' }],
     risks: [],
     gate2: { ready: 'Ready' },
   },

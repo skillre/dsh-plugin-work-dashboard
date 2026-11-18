@@ -1,0 +1,204 @@
+schema_version: "3.1"
+poc_id: FIX-G3
+name: 夹具 · G3 结果验证（部分证明，证据链是重点）
+org:
+  system: 人保体系
+  company: 人保财险
+  department: 信息技术部
+amount_wan: 1200
+poc_type: 大体量项目
+priority: strategic
+owner: 靳承德
+sales: 林鹤
+tech_owner: 李国新
+exec_sponsor: 陈总
+stage: G3-结果验证
+status: 进行中
+stage_since: 2026-10-01
+gate0:
+  why_customer: 等保 2.0 复测在即，现有设备吞吐与日志留存均不达标。
+  why_us: 把上网行为管理品类保持在深信服范围内。下一步：完成面向总公司的立项测试。
+  decision_chain: 技术验证 → 信息中心评审 → 采购立项（张总）
+  post_poc_decision: 通过则纳入 2027 Q1 信创替换预算，覆盖 3 个数据中心。
+  competitor: 奇安信、自研产品线
+  review:
+    conclusion: 通过
+    reviewer: 靳承德
+    reviewed_at: 2026-09-28
+  missing: []
+  complete: true
+plan:
+  customer_pain: 现有设备在 5000 人规模下吞吐不足，日志只留 30 天不合规。
+  expected_recognition: 客户信息中心书面认可达标，并同意进入采购立项。
+  criteria:
+  - id: cri-01
+    name: 5000 人并发接入稳定运行
+    metric: 成功率
+    baseline: null
+    target: ">=99.5%"
+    status: 已达成
+  - id: cri-02
+    name: 日志留存合规
+    metric: 留存天数
+    baseline: 30 天
+    target: ">=180 天"
+    status: 未验证
+  - id: cri-03
+    name: 终端兼容覆盖
+    metric: 覆盖终端比例
+    baseline: 62%
+    target: ">=95%"
+    status: 部分达成
+  scenarios:
+  - id: scn-01
+    name: 办公网远程接入
+    goal: 5000 人并发下成功率 ≥ 99.5%，稳定运行 7 天
+    status: 已证明
+    evidence_count: 3
+    recognition: 认可
+  - id: scn-02
+    name: 出差移动接入
+    goal: 弱网环境下接入成功率 ≥ 95%，首包 < 3s
+    status: 待客户确认
+    evidence_count: 1
+    recognition: 部分认可
+  - id: scn-03
+    name: 日志检索与留存
+    goal: 6 个月日志 10 秒内可检索，留存 ≥ 180 天
+    status: 无证据
+    evidence_count: 0
+    recognition: ""
+  our_edge: 零信任架构与自研日志引擎
+  timeline:
+    start: 2026-10-01
+    end: 2026-12-31
+  risks:
+  - name: 现有设备吞吐不足，压测环境与生产存在差异
+    level: high
+    mitigation: 先在分公司搭镜像环境预演
+  - name: 客户 Q4 采购预算收紧，立项时间可能推迟
+    level: medium
+    mitigation: 提前锁定预算窗口
+  - name: 终端型号多，兼容性验证工作量被低估
+    level: low
+    mitigation: 分批推进
+  report_nodes:
+  - 阶段一汇报
+  - 阶段二汇报
+  gate1:
+    conclusion: 通过
+    reviewed_at: 2026-10-05
+  gate2:
+    ready: Ready
+    checked_at: 2026-10-08
+    prerequisites:
+    - 测试环境就绪
+    - 客户技术接口人确认
+progress:
+- seq: 1
+  date: 2026-10-08
+  type: 客户阶段同步
+  change: 阶段推进
+  goal: 启动 G3 结果验证
+  scenario_ids: []
+  criteria_ids: []
+  actual: 客户确认进入结果验证阶段，约定分场景逐项确认
+  completion: "25%"
+  evidence: []
+  customer:
+    synced_with: 李国新
+    feedback: 同意按场景推进
+    recognition: 待确认
+  gate3_1: 待补证据
+  gate3_2: 待确认
+  next:
+    goal: 完成办公网场景压测
+    owner: 张三
+    deadline: 2026-10-20
+- seq: 2
+  date: 2026-10-16
+  type: 内部Review
+  change: 证据补充
+  goal: 验证 5000 人并发接入
+  scenario_ids:
+  - scn-01
+  criteria_ids:
+  - cri-01
+  actual: 完成 5000 人并发压测，成功率 99.6%，连续稳定 7 天
+  completion: "100%"
+  evidence:
+  - title: 压测报告（2026-10-16）
+    link: https://example.com/report-1
+    type: 文档
+  - title: 监控曲线 · 成功率 99.6%
+    link: https://example.com/chart-1
+    type: 截图
+  - title: 客户签字的测试结论
+    link: https://example.com/signoff-1
+    type: 文档
+  customer:
+    synced_with: 王工
+    feedback: 性能比预期好
+    recognition: 认可
+  gate3_1: 可证明
+  gate3_2: 已确认
+  next:
+    goal: 推进出差移动接入场景
+    owner: 李四
+    deadline: 2026-11-01
+- seq: 3
+  date: 2026-10-28
+  type: 客户阶段同步
+  change: 证据补充
+  goal: 验证弱网出差接入
+  scenario_ids:
+  - scn-02
+  criteria_ids:
+  - cri-03
+  actual: 弱网下接入成功率 92%，未达 95% 目标，需调优
+  completion: "50%"
+  evidence:
+  - title: 弱网测试记录
+    link: https://example.com/weak-net
+    type: 数据
+  customer:
+    synced_with: 王工
+    feedback: 还需再调优，暂不能确认
+    recognition: 部分认可
+  gate3_1: 可证明
+  gate3_2: 待确认
+  next:
+    goal: 调优后重测弱网接入
+    owner: 李四
+    deadline: 2026-11-15
+outcome:
+  achievement: 部分达成
+  customer_recognition: 部分认可
+  our_proof: 已证明 5000 人并发稳定达标；弱网场景待调优
+  remaining_risks: 日志检索场景尚无任何证据
+  conclusion:
+    proved: 办公网场景达标
+    recognized: 客户认可办公网性能
+    next_business: 待补齐日志场景后推动立项
+  business:
+    milestone: 推动信息中心评审
+    owner: 林鹤
+    deadline: 2026-12-05
+    status: 待推进
+  overall: 主要场景已证明，日志场景缺口需在 11 月补齐
+  reviewed_at: 2026-10-30
+gate_decisions:
+- from: G0-立项
+  to: G1-方案设计
+  decided_at: 2026-09-28
+  decided_by: 靳承德
+  basis: human
+  signals_ref: null
+  note: 五必填补齐
+- from: G2-方案验证
+  to: G3-结果验证
+  decided_at: 2026-10-01
+  decided_by: 靳承德
+  basis: human
+  signals_ref: null
+  note: 前置条件就绪，场景已定义

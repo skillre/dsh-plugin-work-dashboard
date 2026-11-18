@@ -191,6 +191,13 @@ function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     projects,
     stats: { total: 3, g0Passed: 2, inProgress: 3, amountTotalWan: 2600, g0Complete: 2, awaitingCustomer: 0, succeeded: 1, stopped: 0 },
     analysis: analysis(),
+    rules: {
+      source: 'ledger' as const,
+      rulesVersion: '3.2',
+      schemaVersion: '3.1',
+      schemaCurrent: true,
+      healthSource: 'ledger' as const,
+    },
     gaps: [
       {
         rule: 'R11-no-next-milestone', ruleNo: 11, level: 'high', priority: 96,
@@ -239,8 +246,10 @@ function progressEntry(overrides: Partial<ProgressView> = {}): ProgressView {
     seq: 2,
     date: '2026-11-01',
     type: '客户阶段同步',
+    change: '证据补充',
     goal: '完成验收',
-    items: ['产线远程运维'],
+    scenarioIds: ['scn-01'],
+    criteriaIds: ['cri-01'],
     actual: '客户验收通过',
     completion: '100%',
     evidence: [{ title: '验收报告.pdf', link: 'https://example.com/b', type: '文档' }],
@@ -287,8 +296,11 @@ function detail(): ProjectDetail {
     plan: {
       customerPain: '设备远程运维风险',
       expectedRecognition: '客户验收',
-      criteria: [{ name: '50 台设备接入', metric: '接入成功率', baseline: '', target: '100%' }],
-      scenarios: ['产线设备远程运维', '供应商临时接入'],
+      criteria: [{ id: 'cri-01', name: '50 台设备接入', metric: '接入成功率', baseline: '', target: '100%', status: '已达成' }],
+      scenarios: [
+        { id: 'scn-01', name: '产线设备远程运维', goal: '50 台设备稳定接入', status: '已证明', evidenceCount: 1, recognition: '认可' },
+        { id: 'scn-02', name: '供应商临时接入', goal: '临时接入可控', status: '未开始', evidenceCount: 0, recognition: '' },
+      ],
       ourEdge: '审计能力',
       timelineStart: '2026-09-01',
       timelineEnd: '2026-11-30',

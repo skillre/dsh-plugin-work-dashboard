@@ -24,7 +24,8 @@ const NOW = new Date('2026-11-05T00:00:00Z')
  * G0 gaps (the common case in the live ledger), and one is achieved with no next
  * milestone (rule 11).
  */
-const COMPLETE = `poc_id: POC-2026-001
+const COMPLETE = `schema_version: "3.1"
+poc_id: POC-2026-001
 name: 某某银行零信任试点
 org: { system: 人保体系, company: 人保财险, department: 信息技术部 }
 amount_wan: 1500
@@ -50,9 +51,12 @@ plan:
   customer_pain: 现有 VPN 接入体验差
   expected_recognition: 客户 IT 部门书面认可
   criteria:
-    - { name: 200人并发, metric: 成功率, baseline: null, target: ">=99.5%" }
-    - { name: 单点登录, metric: 对接验收, baseline: null, target: 通过 }
-  scenarios: [办公网远程接入, 出差移动接入, 第三方运维接入]
+    - { id: cri-01, name: 200人并发, metric: 成功率, baseline: null, target: ">=99.5%", status: 已达成 }
+    - { id: cri-02, name: 单点登录, metric: 对接验收, baseline: null, target: 通过, status: 部分达成 }
+  scenarios:
+    - { id: scn-01, name: 办公网远程接入, goal: 200人并发稳定, status: 待客户确认, evidence_count: 1, recognition: 部分认可 }
+    - { id: scn-02, name: 出差移动接入, goal: 弱网接入达标, status: 无证据, evidence_count: 0, recognition: 待确认 }
+    - { id: scn-03, name: 第三方运维接入, goal: 第三方可控接入, status: 未开始, evidence_count: 0, recognition: "" }
   our_edge: 零信任架构
   timeline: { start: 2026-10-01, end: 2026-12-31 }
   risks:
@@ -64,8 +68,10 @@ progress:
   - seq: 1
     date: 2026-10-15
     type: 内部Review
+    change: 证据补充
     goal: 验证200人并发接入
-    items: [办公网远程接入]
+    scenario_ids: [scn-01]
+    criteria_ids: [cri-01]
     actual: 完成150人灰度
     completion: "75%"
     evidence:
@@ -156,9 +162,12 @@ plan:
   customer_pain: 设备远程运维风险
   expected_recognition: 客户验收
   criteria:
-    - { name: 50台设备接入, metric: 接入数, baseline: null, target: 50 }
-    - { name: 运维审计, metric: 覆盖, baseline: null, target: 100% }
-  scenarios: [产线远程运维, 供应商临时接入, 车间网络隔离]
+    - { id: cri-01, name: 50台设备接入, metric: 接入数, baseline: null, target: 50, status: 已达成 }
+    - { id: cri-02, name: 运维审计, metric: 覆盖, baseline: null, target: 100%, status: 已达成 }
+  scenarios:
+    - { id: scn-01, name: 产线远程运维, goal: 50台接入, status: 已证明, evidence_count: 1, recognition: 认可 }
+    - { id: scn-02, name: 供应商临时接入, goal: 临时接入可控, status: 未开始, evidence_count: 0, recognition: "" }
+    - { id: scn-03, name: 车间网络隔离, goal: 隔离达标, status: 未开始, evidence_count: 0, recognition: "" }
   our_edge: 审计能力
   timeline: { start: 2026-09-01, end: 2026-11-30 }
   risks:
@@ -170,8 +179,9 @@ progress:
   - seq: 1
     date: 2026-09-01
     type: 内部Review
+    change: 阶段推进
     goal: 完成立项
-    items: []
+    scenario_ids: []
     actual: 立项通过
     completion: "25%"
     evidence: []
@@ -182,8 +192,10 @@ progress:
   - seq: 2
     date: 2026-11-01
     type: 客户阶段同步
+    change: 证据补充
     goal: 完成验收
-    items: [产线远程运维]
+    scenario_ids: [scn-01]
+    criteria_ids: [cri-01, cri-02]
     actual: 客户验收通过
     completion: "100%"
     evidence:
@@ -234,6 +246,13 @@ function cacheOf(path: string, ready = true) {
       if (info.size > 512 * 1024) throw new RepoError('too-large', 'too large')
       return readFile(file, 'utf8')
     },
+    // No `config/rules.yaml` in these fixtures: the store must fall back to the
+    // built-in thresholds and say so, which is the stale-cache path in the wild.
+    async readRules() { return null },
+    async readDerive() { return null },
+    async readHealth() { return null },
+    // No `signals/` either: an absent directory is the normal case, not an error.
+    async signalFiles() { return new Map<string, string>() },
   }
 }
 
@@ -438,6 +457,31 @@ describe('detail', () => {
     expect(detail!.gaps.map((gap) => gap.rule)).toContain('R11-no-next-milestone')
   })
 
+  it('carries the v3.1 scenario and criteria state through to the view', async () => {
+    // v3.1 attaches evidence by id and lets the ledger derive per-scenario state.
+    // If the view drops id/status, the detail page cannot show which scenario is
+    // unproven, which is the whole reason the two-layer page exists.
+    const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
+    const detail = await store.detail('POC-2026-003')
+    expect(detail!.plan.scenarios[0]).toMatchObject({
+      id: 'scn-01',
+      name: '产线远程运维',
+      status: '已证明',
+      evidenceCount: 1,
+      recognition: '认可',
+    })
+    expect(detail!.plan.scenarios[1]).toMatchObject({ id: 'scn-02', status: '未开始', evidenceCount: 0 })
+    expect(detail!.plan.criteria[0]).toMatchObject({ id: 'cri-01', status: '已达成' })
+
+    // The progress entry cites ids, and carries the mandatory `change`.
+    expect(detail!.progress[1]).toMatchObject({
+      change: '证据补充',
+      scenarioIds: ['scn-01'],
+      criteriaIds: ['cri-01', 'cri-02'],
+    })
+    expect(detail!.progress[0]).toMatchObject({ change: '阶段推进', scenarioIds: [], criteriaIds: [] })
+  })
+
   it('returns null for an unknown id and for a cold cache', async () => {
     const store = new PocStore(cacheOf(repoPath) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
     expect(await store.detail('POC-9999')).toBeNull()
@@ -462,8 +506,11 @@ describe('warnings', () => {
       const store = new PocStore(cacheOf(dir) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
       const snapshot = await store.snapshot()
       expect(snapshot.projects).toHaveLength(1)
-      expect(snapshot.warnings).toHaveLength(1)
-      expect(snapshot.warnings[0]).toContain('broken.yaml')
+      // One warning for the broken file; the fixtures ship no `config/rules.yaml`,
+      // so the fallback-thresholds notice is expected alongside it.
+      const fileWarnings = snapshot.warnings.filter((item) => item.includes('broken.yaml'))
+      expect(fileWarnings).toHaveLength(1)
+      expect(snapshot.warnings.some((item) => item.includes('rules.yaml'))).toBe(true)
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
@@ -487,7 +534,12 @@ describe('warnings', () => {
       const store = new PocStore(cacheOf(dir) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
       const snapshot = await store.snapshot()
       expect(snapshot.projects).toHaveLength(0)
-      expect(snapshot.warnings).toHaveLength(2)
+      // Two file warnings, plus one notice per absent config file (the fixtures
+      // ship no `config/`). Only the file warnings are about the projects.
+      const fileWarnings = snapshot.warnings.filter(
+        (item) => !item.includes('rules.yaml') && !item.includes('health.yaml'),
+      )
+      expect(fileWarnings).toHaveLength(2)
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
@@ -563,6 +615,161 @@ describe('cache directory safety', () => {
       await expect(guarded.prepare()).rejects.toThrow(/refusing to clear/)
       // The user's file is still there.
       expect(await import('node:fs/promises').then((fs) => fs.readFile(join(foreign, 'precious.txt'), 'utf8'))).toBe('do not delete')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+/**
+ * Three-source cache handling (schema 3.1).
+ *
+ * The ledger publishes facts (`projects/`), judgement (`config/`) and agent
+ * opinions (`signals/`), and each fails differently. These tests pin the three
+ * distinct behaviours, because collapsing them is the defect that matters: a
+ * stale cache must stay renderable, while its provenance must not be overstated.
+ */
+describe('three-source cache', () => {
+  /** Seed a cache with arbitrary relative paths, not just `projects/`. */
+  async function seedTree(files: Record<string, string>): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), 'poc-tree-test-'))
+    for (const [relative, body] of Object.entries(files)) {
+      const target = join(dir, relative)
+      await mkdir(join(target, '..'), { recursive: true })
+      await writeFile(target, body, 'utf8')
+    }
+    return dir
+  }
+
+  /** A cache double that reads whatever the seeded tree actually contains. */
+  function realCache(path: string) {
+    const read = async (relative: string): Promise<string | null> => {
+      try {
+        const { readFile } = await import('node:fs/promises')
+        return await readFile(join(path, relative), 'utf8')
+      } catch {
+        return null
+      }
+    }
+    return {
+      repoPath: path,
+      repository: 'skillre/workbranch',
+      branch: 'main',
+      lastFetchedAt: null as string | null,
+      async isReady() { return true },
+      async projectFiles() {
+        const { readdir } = await import('node:fs/promises')
+        const names = await readdir(join(path, 'projects'))
+        return names.filter((name) => name.endsWith('.yaml')).sort().map((name) => join(path, 'projects', name))
+      },
+      async readProject(file: string) {
+        const { readFile } = await import('node:fs/promises')
+        return readFile(file, 'utf8')
+      },
+      readRules: () => read('config/rules.yaml'),
+      readDerive: () => read('config/derive.yaml'),
+      readHealth: () => read('config/health.yaml'),
+      async signalFiles() {
+        const { readdir } = await import('node:fs/promises')
+        const found = new Map<string, string>()
+        let names: string[]
+        try {
+          names = await readdir(join(path, 'signals'))
+        } catch {
+          return found
+        }
+        for (const name of names.filter((entry) => entry.endsWith('.yaml')).sort()) {
+          const body = await read(`signals/${name}`)
+          if (body !== null) found.set(name.replace(/\.yaml$/, ''), body)
+        }
+        return found
+      },
+    }
+  }
+
+  const RULES = `version: "3.2"
+thresholds:
+  large_amount_wan: 300
+  criteria:  { min: 2, max: 3 }
+  scenarios: { min: 3, max: 5 }
+  risks:     { max: 3 }
+  stall_days: 45
+rules:
+  - { id: R14, name: 场景待客户确认, level: info, priority: 30 }
+`
+  const HEALTH = `stall_days: 45
+facts:     { progress_stale_days: 7, change_stale_days: 14 }
+judgment:  { g0_review_stale_days: 30, plan_stale_days: 30 }
+`
+
+  it('reports ledger provenance when config/ is present', async () => {
+    const dir = await seedTree({
+      'projects/POC-2026-001.yaml': COMPLETE,
+      'config/rules.yaml': RULES,
+      'config/health.yaml': HEALTH,
+    })
+    try {
+      const store = new PocStore(realCache(dir) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
+      const snapshot = await store.snapshot()
+      expect(snapshot.rules.source).toBe('ledger')
+      expect(snapshot.rules.rulesVersion).toBe('3.2')
+      expect(snapshot.rules.healthSource).toBe('ledger')
+      // The fixtures declare schema 3.1, so the page may use v3.1 features.
+      expect(snapshot.rules.schemaVersion).toBe('3.1')
+      expect(snapshot.rules.schemaCurrent).toBe(true)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('still renders a stale cache, but marks the thresholds as fallback', async () => {
+    // A clone taken before the ledger added `config/`. It must not fail: the
+    // projects are readable and their facts are what the page is for. What it
+    // must not do is present built-in thresholds as the ledger's.
+    const dir = await seedTree({ 'projects/POC-2026-001.yaml': COMPLETE })
+    try {
+      const store = new PocStore(realCache(dir) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
+      const snapshot = await store.snapshot()
+      expect(snapshot.cacheReady).toBe(true)
+      expect(snapshot.projects).toHaveLength(1)
+      expect(snapshot.rules.source).toBe('fallback')
+      expect(snapshot.rules.rulesVersion).toBe('')
+      expect(snapshot.rules.healthSource).toBe('fallback')
+      expect(snapshot.warnings.some((item) => item.includes('rules.yaml'))).toBe(true)
+      expect(snapshot.warnings.some((item) => item.includes('health.yaml'))).toBe(true)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('treats an absent signals/ directory as normal, not as a problem', async () => {
+    const dir = await seedTree({
+      'projects/POC-2026-001.yaml': COMPLETE,
+      'config/rules.yaml': RULES,
+    })
+    try {
+      const store = new PocStore(realCache(dir) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
+      const snapshot = await store.snapshot()
+      // Most projects have no signal; a warning for each would drown the real ones.
+      expect(snapshot.warnings.some((item) => item.includes('signals/'))).toBe(false)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('skips a malformed signal with a warning instead of failing the page', async () => {
+    // The ledger's own consumer contract: degrade gracefully, never blank the page.
+    const dir = await seedTree({
+      'projects/POC-2026-001.yaml': COMPLETE,
+      'config/rules.yaml': RULES,
+      'signals/POC-2026-001.yaml': 'poc_id: [unclosed\n',
+    })
+    try {
+      const store = new PocStore(realCache(dir) as unknown as RepoCache, { now: () => NOW, stallDays: 45 })
+      const snapshot = await store.snapshot()
+      expect(snapshot.cacheReady).toBe(true)
+      expect(snapshot.projects).toHaveLength(1)
+      expect(snapshot.warnings.some((item) => item.includes('signals/POC-2026-001.yaml'))).toBe(true)
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

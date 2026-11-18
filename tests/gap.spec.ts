@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { daysSince, lastProgressDate, normalizeStage, readDimensions, scanGaps, text } from '../src/gap.js'
+import { parseRules } from '../src/rules.js'
 import type { PocRecord } from '../src/types.js'
 
 /**
@@ -27,7 +28,7 @@ function record(overrides: Partial<PocRecord> = {}): PocRecord {
     gate0: { missing: [], complete: true, review: { conclusion: '通过' } },
     plan: {
       criteria: [{ name: 'a' }, { name: 'b' }, { name: 'c' }],
-      scenarios: ['s1', 's2', 's3'],
+      scenarios: [{ id: 'scn-01', name: 's1' }, { id: 'scn-02', name: 's2' }, { id: 'scn-03', name: 's3' }],
       risks: [{ name: 'r1' }],
       gate2: { ready: 'Ready' },
     },
@@ -91,19 +92,19 @@ describe('R3 — G0 passed but no success criteria', () => {
 
 describe('R4–R6 — focus limits', () => {
   it('R4 fires for 1 or 4+ criteria, silent for 2–3', () => {
-    expect(rules(record({ plan: { criteria: [{ name: 'a' }], scenarios: ['s1', 's2', 's3'], risks: [] } }))).toContain('R4-criteria-count')
-    expect(rules(record({ plan: { criteria: [{ name: 'a' }, { name: 'b' }, { name: 'c' }, { name: 'd' }], scenarios: ['s1', 's2', 's3'], risks: [] } }))).toContain('R4-criteria-count')
+    expect(rules(record({ plan: { criteria: [{ name: 'a' }], scenarios: [{ id: 'scn-01', name: 's1' }, { id: 'scn-02', name: 's2' }, { id: 'scn-03', name: 's3' }], risks: [] } }))).toContain('R4-criteria-count')
+    expect(rules(record({ plan: { criteria: [{ name: 'a' }, { name: 'b' }, { name: 'c' }, { name: 'd' }], scenarios: [{ id: 'scn-01', name: 's1' }, { id: 'scn-02', name: 's2' }, { id: 'scn-03', name: 's3' }], risks: [] } }))).toContain('R4-criteria-count')
     expect(rules(record())).not.toContain('R4-criteria-count')
   })
 
   it('R5 fires for fewer than 3 or more than 5 scenarios', () => {
-    expect(rules(record({ plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: ['s1'], risks: [] } }))).toContain('R5-scenarios-count')
-    expect(rules(record({ plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: ['1', '2', '3', '4', '5', '6'], risks: [] } }))).toContain('R5-scenarios-count')
+    expect(rules(record({ plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: [{ id: 'scn-01', name: 's1' }], risks: [] } }))).toContain('R5-scenarios-count')
+    expect(rules(record({ plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: [{ id: 'scn-01', name: '1' }, { id: 'scn-02', name: '2' }, { id: 'scn-03', name: '3' }, { id: 'scn-04', name: '4' }, { id: 'scn-05', name: '5' }, { id: 'scn-06', name: '6' }], risks: [] } }))).toContain('R5-scenarios-count')
     expect(rules(record())).not.toContain('R5-scenarios-count')
   })
 
   it('R6 fires above three risks', () => {
-    expect(rules(record({ plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: ['s1', 's2', 's3'], risks: [{}, {}, {}, {}] } }))).toContain('R6-risks-overflow')
+    expect(rules(record({ plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: [{ id: 'scn-01', name: 's1' }, { id: 'scn-02', name: 's2' }, { id: 'scn-03', name: 's3' }], risks: [{}, {}, {}, {}] } }))).toContain('R6-risks-overflow')
     expect(rules(record())).not.toContain('R6-risks-overflow')
   })
 
@@ -123,7 +124,7 @@ describe('R4–R6 — focus limits', () => {
 describe('R7 — progress while G2 is not ready', () => {
   it('fires when progress exists and gate2 is not Ready', () => {
     const poc = record({
-      plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: ['s1', 's2', 's3'], risks: [], gate2: { ready: '未Ready' } },
+      plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: [{ id: 'scn-01', name: 's1' }, { id: 'scn-02', name: 's2' }, { id: 'scn-03', name: 's3' }], risks: [], gate2: { ready: '未Ready' } },
       progress: [{ date: '2026-10-01', actual: '做了' }],
     })
     expect(rules(poc)).toContain('R7-g2-not-ready')
@@ -131,7 +132,7 @@ describe('R7 — progress while G2 is not ready', () => {
 
   it('stays silent without progress, even when G2 is not ready', () => {
     const poc = record({
-      plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: ['s1', 's2', 's3'], risks: [], gate2: { ready: '未Ready' } },
+      plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: [{ id: 'scn-01', name: 's1' }, { id: 'scn-02', name: 's2' }, { id: 'scn-03', name: 's3' }], risks: [], gate2: { ready: '未Ready' } },
     })
     expect(rules(poc)).not.toContain('R7-g2-not-ready')
   })
@@ -249,10 +250,10 @@ describe('severity and ordering', () => {
       ['R1-gate0-missing', record({ gate0: { missing: ['x'], review: {} } })],
       ['R2-large-amount-no-g0', record({ amount_wan: 1500, gate0: { missing: [], review: {} } })],
       ['R3-g0-passed-no-plan', record({ plan: { criteria: [], scenarios: [], risks: [], gate2: { ready: 'Ready' } } })],
-      ['R4-criteria-count', record({ plan: { criteria: [{ name: 'a' }], scenarios: ['s1', 's2', 's3'], risks: [] } })],
-      ['R5-scenarios-count', record({ plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: ['s1'], risks: [] } })],
-      ['R6-risks-overflow', record({ plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: ['s1', 's2', 's3'], risks: [{}, {}, {}, {}] } })],
-      ['R7-g2-not-ready', record({ plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: ['s1', 's2', 's3'], risks: [], gate2: { ready: '未Ready' } }, progress: [{ date: '2026-10-01', actual: 'a', evidence: [{ title: 'e' }], customer: { recognition: '认可' } }] })],
+      ['R4-criteria-count', record({ plan: { criteria: [{ name: 'a' }], scenarios: [{ id: 'scn-01', name: 's1' }, { id: 'scn-02', name: 's2' }, { id: 'scn-03', name: 's3' }], risks: [] } })],
+      ['R5-scenarios-count', record({ plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: [{ id: 'scn-01', name: 's1' }], risks: [] } })],
+      ['R6-risks-overflow', record({ plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: [{ id: 'scn-01', name: 's1' }, { id: 'scn-02', name: 's2' }, { id: 'scn-03', name: 's3' }], risks: [{}, {}, {}, {}] } })],
+      ['R7-g2-not-ready', record({ plan: { criteria: [{ name: 'a' }, { name: 'b' }], scenarios: [{ id: 'scn-01', name: 's1' }, { id: 'scn-02', name: 's2' }, { id: 'scn-03', name: 's3' }], risks: [], gate2: { ready: '未Ready' } }, progress: [{ date: '2026-10-01', actual: 'a', evidence: [{ title: 'e' }], customer: { recognition: '认可' } }] })],
       ['R8-progress-no-evidence', record({ progress: [{ date: '2026-10-01', actual: 'a', evidence: [] }] })],
       ['R9-evidence-no-recognition', record({ progress: [{ date: '2026-10-01', actual: 'a', evidence: [{ title: 'e' }], customer: { recognition: '待确认' } }] })],
       ['R10-g3-1-without-g3-2', record({ progress: [{ date: '2026-10-01', gate3_1: '可证明', gate3_2: '待确认' }] })],
@@ -311,5 +312,106 @@ describe('v3 helpers', () => {
     expect(text('  x  ')).toBe('x')
     expect(text(0)).toBe('0')
     expect(text(false)).toBe('false')
+  })
+})
+
+/**
+ * v3.1 state rules (R13–R16).
+ *
+ * These read the ledger's DERIVED per-item state rather than recomputing it, so
+ * every fixture below sets `status` explicitly: the plugin's job is to react to
+ * the ledger's verdict, not to form a second opinion CI would call wrong.
+ */
+describe('R13–R16 — v3.1 state rules', () => {
+  const withStatuses = (statuses: string[], progress = false): PocRecord =>
+    record({
+      plan: {
+        criteria: [{ id: 'cri-01', name: 'a' }],
+        scenarios: statuses.map((status, index) => ({ id: `scn-0${index + 1}`, name: `s${index + 1}`, status })),
+        risks: [],
+        gate2: { ready: 'Ready' },
+      },
+      progress: progress ? [{ seq: 1, date: '2026-10-15', change: '证据补充', actual: 'ok', evidence: [{ title: 'x' }] }] : [],
+    })
+
+  it('R13 fires for a scenario with no evidence once work has started', () => {
+    expect(rules(withStatuses(['无证据', '未开始', '未开始'], true))).toContain('R13-scenario-no-evidence')
+  })
+
+  it('R13 stays silent before any progress: not started is not a finding', () => {
+    expect(rules(withStatuses(['无证据', '未开始', '未开始'], false))).not.toContain('R13-scenario-no-evidence')
+  })
+
+  it('R14 is info-level and fires whenever a scenario awaits the customer', () => {
+    const found = scanGaps(withStatuses(['待客户确认', '未开始', '未开始'], true), { now: NOW, stallDays: 45 })
+    const r14 = found.find((item) => item.rule === 'R14-scenario-awaiting-customer')
+    expect(r14).toBeDefined()
+    // Waiting on the customer is a status, not a fault: it must not sort or paint
+    // like a missed-evidence finding.
+    expect(r14!.level).toBe('info')
+  })
+
+  it('R15 fires for an unverified criterion only when the criteria count is in range', () => {
+    const inRange = record({
+      plan: { criteria: [{ id: 'cri-01', name: 'a', status: '未验证' }, { id: 'cri-02', name: 'b', status: '已达成' }], scenarios: [], risks: [] },
+    })
+    expect(rules(inRange)).toContain('R15-criteria-unverified')
+
+    // One criterion is the wrong SIZE, which R4 already reports; firing R15 too
+    // would report the same fact twice.
+    const outOfRange = record({
+      plan: { criteria: [{ id: 'cri-01', name: 'a', status: '未验证' }], scenarios: [], risks: [] },
+    })
+    expect(rules(outOfRange)).not.toContain('R15-criteria-unverified')
+    expect(rules(outOfRange)).toContain('R4-criteria-count')
+  })
+
+  it('R16 fires for a never-started scenario only when the plan is the right size and work began', () => {
+    expect(rules(withStatuses(['已证明', '未开始', '未开始'], true))).toContain('R16-scenario-not-started')
+    // No progress yet: nothing has been skipped, the project simply has not begun.
+    expect(rules(withStatuses(['已证明', '未开始', '未开始'], false))).not.toContain('R16-scenario-not-started')
+    // Two scenarios is the wrong size (R5's job).
+    expect(rules(withStatuses(['已证明', '未开始'], true))).not.toContain('R16-scenario-not-started')
+  })
+
+  it('an absent derived status is never read as a state', () => {
+    // A v3.0 file, or a cache whose derive step has not run, has no `status`.
+    // Treating '' as 无证据 would invent findings the ledger never made.
+    expect(rules(withStatuses(['', '', ''], true))).not.toContain('R13-scenario-no-evidence')
+    expect(rules(withStatuses(['', '', ''], true))).not.toContain('R16-scenario-not-started')
+  })
+})
+
+describe('thresholds come from the ledger, not from constants', () => {
+  it('uses the injected bundle instead of the built-in numbers', () => {
+    // A record at 150万 is below the default 300万 line, so R2 is silent…
+    const poc = record({ amount_wan: 150, gate0: { missing: [], complete: true, review: { conclusion: '未评审' } } })
+    expect(rules(poc)).not.toContain('R2-large-amount-no-g0')
+
+    // …but the ledger can lower the line, and then it must fire.
+    const strict = parseRules(`
+version: "9.9"
+thresholds:
+  large_amount_wan: 100
+  criteria:  { min: 2, max: 3 }
+  scenarios: { min: 3, max: 5 }
+  risks:     { max: 3 }
+  stall_days: 45
+`)
+    const found = scanGaps(poc, { now: NOW, stallDays: 45, rules: strict })
+    expect(found.map((item) => item.rule)).toContain('R2-large-amount-no-g0')
+  })
+
+  it('honours a widened criteria range', () => {
+    const poc = record({
+      plan: { criteria: [{ name: 'a' }, { name: 'b' }, { name: 'c' }, { name: 'd' }], scenarios: [], risks: [] },
+    })
+    expect(rules(poc)).toContain('R4-criteria-count')
+    const loose = parseRules(`
+version: "9.9"
+thresholds:
+  criteria: { min: 1, max: 5 }
+`)
+    expect(scanGaps(poc, { now: NOW, stallDays: 45, rules: loose }).map((item) => item.rule)).not.toContain('R4-criteria-count')
   })
 })
