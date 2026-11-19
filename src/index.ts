@@ -119,12 +119,14 @@ export function createRuntime(config: WorkDashboardConfig, options: { home?: str
      * rather than an error, because a stale browser tab holding an id that was
      * renamed in the ledger should still produce the projects it can.
      */
-    async exportForm(mode, pocIds): Promise<ExportFormResult> {
+    async exportForm(mode, pocIds, intent): Promise<ExportFormResult> {
       await this.prepare()
       const stamp = now()
+      // Default from `mode` so an older Client bundle keeps working.
+      const resolved = intent ?? (mode === 'blank' ? 'new' : 'supplement')
       if (mode === 'blank') {
         return {
-          html: buildFormHtml({ mode: 'blank', projects: [], now: stamp }),
+          html: buildFormHtml({ mode: 'blank', intent: resolved, projects: [], now: stamp }),
           fileName: formFileName({ mode: 'blank', pocIds: [], now: stamp }),
           projectCount: 0,
         }
@@ -133,7 +135,7 @@ export function createRuntime(config: WorkDashboardConfig, options: { home?: str
       const records = (await loadOrEmpty()).filter((record) => wanted.has(text(record.poc_id)))
       const projects = records.map(projectForForm)
       return {
-        html: buildFormHtml({ mode: 'fill', projects, now: stamp }),
+        html: buildFormHtml({ mode: 'fill', intent: resolved, projects, now: stamp }),
         fileName: formFileName({ mode: 'fill', pocIds: records.map((record) => text(record.poc_id)), now: stamp }),
         projectCount: projects.length,
       }

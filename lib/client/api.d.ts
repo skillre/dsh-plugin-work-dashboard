@@ -36,7 +36,7 @@ export interface ClientApi {
      * Generated on the Host because the generator needs the YAML serializer, which
      * must not be bundled into the browser module.
      */
-    exportForm(mode: 'fill' | 'blank', pocIds: readonly string[], signal?: AbortSignal): Promise<ExportFormResult>;
+    exportForm(mode: 'fill' | 'blank', pocIds: readonly string[], intent?: 'new' | 'supplement' | 'progress', signal?: AbortSignal): Promise<ExportFormResult>;
 }
 /** Create the API bound to this plugin's Fiber lifetime. */
 export declare function createApi(connection: ClientConnectionLike, lifetime: AbortSignal): ClientApi;

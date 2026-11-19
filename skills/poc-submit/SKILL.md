@@ -21,31 +21,80 @@ description: 校验组员交回的 POC 数据文件（.json），合并进 v3 YA
 
 ## 组员交回的 JSON 结构
 
+**变更集（v3.1）**：只含人填写的字段，**不含任何派生字段**。
+
 ```json
 {
-  "generatedAt": "2026-11-06T12:35:00.000Z",
-  "generatedBy": "POC 表单 v3",
-  "pocs": {
-    "POC-006": {
-      "identity": { "name": "...", "org": { "system": "人保体系", "company": "..." }, "amount_wan": 1500 },
-      "gate0": { "why_customer": "...", "why_us": "...", "decision_chain": "..." },
-      "plan": { "criteria": [{ "name": "...", "metric": "...", "target": "..." }], "scenarios": ["..."], "risks": [{ "name": "...", "level": "high", "mitigation": "..." }] },
+  "schemaVersion": "3.1",
+  "generatedAt": "2026-11-19T05:00:00.000Z",
+  "generatedBy": "POC 信息收集表单 v3.1",
+  "intent": "supplement",
+  "changes": [
+    {
+      "schema_version": "3.1",
+      "poc_id": "POC-006",
+      "name": "人保财险全国信创上网行为管理替换",
+      "org": { "system": "人保体系", "company": "人保财险", "department": null },
+      "amount_wan": 1000,
+      "poc_type": "大体量项目",
+      "owner": "靳承德/苑炳轩",
+      "sales": "林鹤",
+      "tech_owner": "李国新",
+      "exec_sponsor": null,
+      "stage": "G0-立项",
+      "status": "进行中",
+      "stage_since": null,
+      "gate0": {
+        "why_customer": "...", "why_us": "...",
+        "decision_chain": "...", "post_poc_decision": "...",
+        "competitor": "...",
+        "review": { "conclusion": "通过", "reviewer": "杨闯", "reviewed_at": "2026-11-19" }
+      },
+      "plan": {
+        "customer_pain": "...", "expected_recognition": "...", "our_edge": "...",
+        "criteria": [{ "id": "cri-01", "name": "...", "metric": "...", "baseline": null, "target": "..." }],
+        "scenarios": [{ "id": "scn-01", "name": "...", "goal": "..." }],
+        "risks": [{ "name": "...", "level": "high", "mitigation": "..." }],
+        "timeline": { "start": "2026-11-01", "end": "2027-01-31" },
+        "gate1": { "conclusion": null },
+        "gate2": { "ready": null }
+      },
       "progress": [
         {
-          "date": "2026-11-06",
+          "date": "2026-11-19",
           "type": "客户阶段同步",
-          "goal": "...", "actual": "...", "completion": "75%",
-          "evidence": [{ "title": "验收报告.pdf", "link": "https://…", "type": "文档" }],
+          "change": "证据补充",
+          "goal": "...",
+          "scenario_ids": ["scn-01"],
+          "criteria_ids": ["cri-01"],
+          "actual": "...",
+          "completion": "75%",
+          "evidence": [{ "title": "压测报告", "link": "https://…", "type": "文档" }],
           "customer": { "synced_with": "王工", "feedback": "…", "recognition": "部分认可" },
           "gate3_1": "可证明", "gate3_2": "待确认",
           "next": { "goal": "...", "owner": "...", "deadline": "2026-12-01" }
         }
-      ],
-      "outcome": { "our_proof": "...", "conclusion": { "proved": "...", "recognized": "...", "next_business": "..." }, "business": { "milestone": "...", "owner": "...", "deadline": "..." } }
+      ]
     }
-  }
+  ]
 }
 ```
+
+### 三条必须遵守的读取规则
+
+| 规则 | 原因 |
+|---|---|
+| **`changes` 是数组**，不是以 `poc_id` 为键的对象 | 一个文件可以装多个项目的变更 |
+| **`null` 表示「没改」**，不是「清空」 | 表单把空字段写成 `null`；合并时 `null` 必须**跳过**，否则会把已有值抹掉 |
+| **没有派生字段** | `gate0.missing`/`complete`、`priority`、场景/指标 `status` 由 `tools/derive.mjs` 算，CI 会重算并校验 |
+
+**`intent` 说明这次交回的是什么**：
+
+| 值 | 含义 | 合并范围 |
+|---|---|---|
+| `new` | 新建项目 | 整个文件都是新的，派生字段由 CI 首次计算 |
+| `supplement` | 补充当前阶段 | 只合并 `changes[].*` 里非 null 的字段 |
+| `progress` | 只记录了一轮进展 | 只有 `progress[]` 非空，其余字段应全部为 null |
 
 ## 处理步骤
 

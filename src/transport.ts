@@ -48,9 +48,12 @@ export interface ConsoleActions {
   /**
    * Build the collection form for one batch.
    *
-   * `blank` ignores `pocIds` and returns the new-project form.
+   * `intent` decides how much of the page is editable: `new` registers a
+   * project, `supplement` fills in the current stage, `progress` appends one
+   * round. It defaults from `mode` when omitted, so an older caller keeps
+   * working.
    */
-  exportForm(mode: 'fill' | 'blank', pocIds: readonly string[]): Promise<ExportFormResult>
+  exportForm(mode: 'fill' | 'blank', pocIds: readonly string[], intent?: 'new' | 'supplement' | 'progress'): Promise<ExportFormResult>
 }
 
 const envelopeSchema = z.object({
@@ -73,6 +76,9 @@ const requestSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('export-form'),
     mode: z.union([z.literal('fill'), z.literal('blank')]),
+    // Optional so a stale Client bundle (already loaded in a browser tab) keeps
+    // working; the Host falls back to deriving it from `mode`.
+    intent: z.union([z.literal('new'), z.literal('supplement'), z.literal('progress')]).optional(),
     // Bounded: a form is meant for a batch a colleague will actually fill in,
     // and an unbounded list would let one request build a thousands-project
     // document on the Host.
@@ -121,7 +127,7 @@ async function dispatch(actions: ConsoleActions, request: PocRequest, signal: Ab
     case 'timeline':
       return actions.timeline()
     case 'export-form':
-      return actions.exportForm(request.mode, request.pocIds)
+      return actions.exportForm(request.mode, request.pocIds, request.intent)
   }
 }
 

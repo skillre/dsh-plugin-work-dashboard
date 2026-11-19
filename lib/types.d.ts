@@ -236,8 +236,14 @@ export interface OrgRecord {
  */
 export interface PocRecord {
     /**
-     * The data-shape version, fixed `"3.1"`. A file without it is a v3.0 record
-     * and is handled as a degraded, read-only shape.
+     * The data-shape version, fixed `"3.1"`.
+     *
+     * Optional only because the reader must not crash on a file that lacks it —
+     * the ledger's validator rejects such a file with `E-VERSION`, so a record
+     * without this stamp never reaches the cache in a healthy checkout. There is
+     * **no v3.0 compatibility mode**: an unstamped record is reported through
+     * `RulesProvenance.schemaCurrent`, not silently reinterpreted as an older
+     * shape.
      */
     schema_version?: string | null;
     poc_id?: string | null;
@@ -645,6 +651,13 @@ export type PocResult<T> = {
         details: Record<string, unknown>;
     };
 };
+/**
+ * What the colleague is doing with a form.
+ *
+ * Mirrors `FormIntent` in `form.ts`, restated here so the transport contract
+ * does not depend on the generator module.
+ */
+export type FormIntentKind = 'new' | 'supplement' | 'progress';
 /** Request kinds accepted by the Host endpoint. */
 export type PocRequest = {
     action: 'list';
@@ -661,6 +674,7 @@ export type PocRequest = {
     action: 'export-form';
     mode: 'fill' | 'blank';
     pocIds: string[];
+    intent?: FormIntentKind;
 };
 /**
  * One generated collection form, ready for the browser to save.

@@ -42,7 +42,7 @@ export interface ClientApi {
    * Generated on the Host because the generator needs the YAML serializer, which
    * must not be bundled into the browser module.
    */
-  exportForm(mode: 'fill' | 'blank', pocIds: readonly string[], signal?: AbortSignal): Promise<ExportFormResult>
+  exportForm(mode: 'fill' | 'blank', pocIds: readonly string[], intent?: 'new' | 'supplement' | 'progress', signal?: AbortSignal): Promise<ExportFormResult>
 }
 
 /** Unwrap one endpoint result, converting a failure into a thrown error. */
@@ -66,6 +66,11 @@ export function createApi(connection: ClientConnectionLike, lifetime: AbortSigna
     detail: (pocId, signal) => call<ProjectDetail>({ action: 'detail', pocId }, signal),
     risks: (signal) => call<RiskBoard>({ action: 'risks' }, signal),
     timeline: (signal) => call<GlobalTimeline>({ action: 'timeline' }, signal),
-    exportForm: (mode, pocIds, signal) => call<ExportFormResult>({ action: 'export-form', mode, pocIds: [...pocIds] }, signal),
+    exportForm: (mode, pocIds, intent, signal) => call<ExportFormResult>(
+      intent === undefined
+        ? { action: 'export-form', mode, pocIds: [...pocIds] }
+        : { action: 'export-form', mode, pocIds: [...pocIds], intent },
+      signal,
+    ),
   }
 }

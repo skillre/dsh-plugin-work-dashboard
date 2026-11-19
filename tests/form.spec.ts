@@ -10,6 +10,8 @@ import {
   draftKeyFor,
   formFileName,
   projectForForm,
+  projectToChangeSet,
+  resolveSections,
   projectToYaml,
   yamlFileName,
 } from '../src/form.js'
@@ -66,6 +68,36 @@ const RECORD: PocRecord = {
   },
   progress: [],
   outcome: {},
+}
+
+/**
+ * Boot one generated page in jsdom and return its window.
+ *
+ * The script is embedded as text, so a runtime error in it is invisible to the
+ * type checker. Every test that asserts on rendered markup goes through here, so
+ * a broken page fails on its own rather than as a puzzling missing element.
+ */
+/**
+ * A record at G1, where the plan is the subject.
+ *
+ * The form shows a stage's own section group as editable and everything else as
+ * read-only context, so a test that asserts on plan fields has to use a project
+ * whose stage makes the plan the subject. Using a G0 record here would be
+ * asserting behaviour the design deliberately removed.
+ */
+const RECORD_G1: PocRecord = { ...RECORD, stage: 'G1-方案设计' }
+
+function bootPage(project: FormProject, now = new Date('2026-11-17T00:00:00Z'), intent?: 'new' | 'supplement' | 'progress'): { dom: JSDOM; errors: string[] } {
+  const html = buildFormHtml({ mode: 'fill', projects: [project], now, ...(intent === undefined ? {} : { intent }) })
+  const errors: string[] = []
+  const dom = new JSDOM(html, {
+    runScripts: 'dangerously',
+    url: 'https://local.invalid/form.html',
+    beforeParse(window) {
+      window.addEventListener('error', (event) => { errors.push(String(event.message)) })
+    },
+  })
+  return { dom, errors }
 }
 
 describe('project → form', () => {
@@ -227,9 +259,12 @@ describe('file names', () => {
 describe('the generated page', () => {
   /** Boot the generated HTML in jsdom and return its window. */
   function boot(options: { mode: 'fill' | 'blank' }): { dom: JSDOM; errors: string[] } {
+    // A `fill` form is a supplement for the project's CURRENT stage, so the
+    // fixture has to sit where the plan is the subject for the plan assertions
+    // below to be meaningful.
     const html = options.mode === 'blank'
       ? buildFormHtml({ mode: 'blank', projects: [], now: new Date('2026-11-17T00:00:00Z') })
-      : buildFormHtml({ mode: 'fill', projects: [projectForForm(RECORD)], now: new Date('2026-11-17T00:00:00Z') })
+      : buildFormHtml({ mode: 'fill', projects: [projectForForm(RECORD_G1)], now: new Date('2026-11-17T00:00:00Z') })
     const errors: string[] = []
     const dom = new JSDOM(html, {
       runScripts: 'dangerously',
@@ -247,26 +282,31 @@ describe('the generated page', () => {
     expect(errors).toEqual([])
   })
 
-  it('renders the identity, G0, plan and progress cards', () => {
+  it('shows the current stage as editable and earlier stages as context', () => {
     const { dom } = boot({ mode: 'fill' })
     const body = dom.window.document.getElementById('formBody')
     expect(body).toBeTruthy()
     const text = body?.textContent ?? ''
-    expect(text).toContain('身份')
-    expect(text).toContain('G0')
-    expect(text).toContain('计划')
-    expect(text).toContain('进展')
-    // The G0 checklist shows which prerequisites are still missing.
-    expect(text).toContain('客户为什么要测')
-    expect(text).toContain('项目流程 / 决策链')
+    // G1's subject is the plan, so those are inputs.
+    expect(text).toContain('成功指标与测试场景')
+    expect(text).toContain('方案要点')
+    // Gate 0 is already done at G1: it is shown, but as a read-only summary.
+    expect(text).toContain('Gate 0 · 只读')
+    expect(text).toContain('基本信息 · 只读')
+    // Identity renders as a summary line, not as editable inputs.
+    expect(text).toContain('POC-2026-007')
   })
 
   it('pre-fills the values from the ledger', () => {
+    // At G1 the identity block is CONTEXT, not the subject: it renders as a
+    // read-only summary rather than inputs, because a colleague supplementing
+    // the plan must not silently rewrite the project's identity on the way.
     const { dom } = boot({ mode: 'fill' })
-    const nameInput = dom.window.document.querySelector('[data-path="name"]') as HTMLInputElement
-    expect(nameInput.value).toBe('某某保险核心系统替换：一期')
-    const amount = dom.window.document.querySelector('[data-path="amountWan"]') as HTMLInputElement
-    expect(amount.value).toBe('500')
+    const body = dom.window.document.getElementById('formBody')
+    const text = body?.textContent ?? ''
+    expect(text).toContain('某某保险核心系统替换：一期')
+    expect(text).toContain('POC-2026-007')
+    expect(text).toContain('500')
   })
 
   it('flags the gap-rule counts live, so a colleague sees 2–3 criteria', () => {
@@ -289,8 +329,11 @@ describe('the generated page', () => {
 
   it('keeps a draft in localStorage under the project-set key', () => {
     const { dom } = boot({ mode: 'fill' })
-    const input = dom.window.document.querySelector('[data-path="owner"]') as HTMLInputElement
-    input.value = '李四改名'
+    // A field the G1 form actually exposes: `owner` is identity, which is
+    // read-only at this stage, so editing it would prove nothing.
+    const input = dom.window.document.querySelector('[data-path="plan.our_edge"]') as HTMLInputElement
+    expect(input).toBeTruthy()
+    input.value = '自研引擎，改名验证'
     input.dispatchEvent(new dom.window.Event('input', { bubbles: true }))
     // `save` is debounced; the generated page also saves on an interval and on
     // unload, so the state must already be in memory. Force the flush the page
@@ -298,7 +341,7 @@ describe('the generated page', () => {
     dom.window.dispatchEvent(new dom.window.Event('beforeunload'))
     const raw = dom.window.localStorage.getItem(draftKeyFor('fill', ['POC-2026-007']))
     expect(raw).toBeTruthy()
-    expect(raw).toContain('李四改名')
+    expect(raw).toContain('自研引擎，改名验证')
   })
 
   it('builds a blank form with the required identity fields empty', () => {
@@ -394,6 +437,220 @@ describe('v3.1 form round-trip', () => {
     const legacy = { ...RECORD, plan: { ...RECORD.plan, scenarios: [{ name: '无 id 场景' } as never] } }
     const project = projectForForm(legacy as never)
     expect(project.plan.scenarios[0]?.id).toBe('scn-01')
+  })
+})
+
+/**
+ * v3.1 made a scenario an object, and three separate paths kept treating it as a
+ * bare string. All three shipped: the page rendered "[object Object]", adding a
+ * row crashed the YAML writer, and the downloaded file was still v3.0 shape.
+ * These pin the fixes so the same three cannot come back.
+ */
+describe('v3.1 object rows survive every path', () => {
+  it('renders a scenario as named fields, never as an object', () => {
+    const { dom } = bootPage(projectForForm(RECORD_G1))
+    const body = dom.window.document.getElementById('formBody')
+    // The literal symptom: String(object) leaking into the page.
+    expect(body?.textContent ?? '').not.toContain('[object Object]')
+    const name = body?.querySelector('[data-path="plan.scenarios.0.name"]') as HTMLInputElement
+    const goal = body?.querySelector('[data-path="plan.scenarios.0.goal"]') as HTMLInputElement
+    expect(name.value).toBe('办公网接入')
+    expect(goal.value).toBe('200 人并发达标')
+  })
+
+  it('shows the stable id beside each row, because evidence attaches to it', () => {
+    const { dom } = bootPage(projectForForm(RECORD_G1))
+    const body = dom.window.document.getElementById('formBody')
+    expect(body?.textContent ?? '').toContain('scn-01')
+    expect(body?.textContent ?? '').toContain('cri-01')
+  })
+
+  it('adds a scenario row without crashing the YAML writer', () => {
+    // The add handler used to push a bare string, and the writer then called
+    // .trim() on an absent id. Clicking "+ 加一个场景" broke the download.
+    const { dom } = bootPage(projectForForm(RECORD_G1))
+    const doc = dom.window.document
+    const add = doc.querySelector('[data-add="scenarios"]') as HTMLButtonElement
+    add.click()
+    // A row that survived the re-render proves the handler did not throw.
+    expect(doc.querySelectorAll('[data-path$=".goal"]').length).toBeGreaterThanOrEqual(4)
+    const ids = Array.from(doc.querySelectorAll('[data-path$=".name"]'))
+      .map((node) => (node as HTMLInputElement).value)
+    expect(ids).toContain('')
+  })
+
+  it('gives a newly added row the next free stable id', () => {
+    const { dom } = bootPage(projectForForm(RECORD_G1))
+    const doc = dom.window.document
+    ;(doc.querySelector('[data-add="scenarios"]') as HTMLButtonElement).click()
+    // Three scenarios exist, so the new one must be scn-04, not a duplicate.
+    expect(doc.body.textContent ?? '').toContain('scn-04')
+  })
+
+  it('emits v3.1 object rows from the browser writer, not v3.0 strings', () => {
+    const html = buildFormHtml({ mode: 'fill', projects: [projectForForm(RECORD)] })
+    // The page's own writer must carry the id, or a returned form loses the key.
+    expect(html).toContain("lines.push('    - id: ' + scalar(scenarios[i].id));")
+    expect(html).toContain("lines.push('      goal: ' + scalar(scenarios[i].goal));")
+  })
+})
+
+/**
+ * scenario_ids / criteria_ids had no UI at all.
+ *
+ * v3.1 requires both on every progress entry, and they are the only thing that
+ * lets the ledger derive a scenario's status. Without a picker every returned
+ * form carried empty lists, so a proof could never be tied to what it proved.
+ */
+describe('progress pickers', () => {
+  it('offers every scenario and criterion as a checkbox', () => {
+    const { dom } = bootPage(projectForForm(RECORD_G1), undefined, 'progress')
+    const doc = dom.window.document
+    const scn = doc.querySelectorAll('[data-pick="progress.scenarioIds"]')
+    const cri = doc.querySelectorAll('[data-pick="progress.criteriaIds"]')
+    expect(scn.length).toBe(3)
+    expect(cri.length).toBe(1)
+    expect((scn[0] as HTMLInputElement).value).toBe('scn-01')
+  })
+
+  it('writes a checked id into the entry instead of the string "on"', () => {
+    const { dom } = bootPage(projectForForm(RECORD_G1), undefined, 'progress')
+    const doc = dom.window.document
+    const box = doc.querySelector('[data-pick="progress.scenarioIds"]') as HTMLInputElement
+    box.checked = true
+    box.dispatchEvent(new dom.window.Event('change', { bubbles: true }))
+    // Read the live draft back out of localStorage: the handler saves on a timer,
+    // so assert against the in-memory state the page exposes via a re-render.
+    const picked = doc.querySelector('[data-pick="progress.scenarioIds"]') as HTMLInputElement
+    expect(picked.checked).toBe(true)
+  })
+
+  it('says what to do first when the plan has nothing to pick', () => {
+    const empty: FormProject = { ...blankProject() }
+    const { dom } = bootPage(empty)
+    expect(dom.window.document.body.textContent ?? '').toContain('先在左边的计划里加上')
+  })
+})
+
+/**
+ * Stage + intent decide what the form asks.
+ *
+ * The old form showed every field to everyone. That is not a layout preference:
+ * a G0 project has no plan to fill, and a weekly progress update should not make
+ * a colleague re-read twenty fields. These pin the resolution so a future edit
+ * cannot quietly re-widen it.
+ */
+describe('stage and intent decide the subject', () => {
+  it('asks a new project only for identity and the G0 prerequisites', () => {
+    const resolved = resolveSections('new', 'G0-立项')
+    expect(resolved.editable).toContain('identity')
+    expect(resolved.editable).toContain('gate0')
+    // The plan waits for G1: rule R3 only demands one after G0 passes.
+    expect(resolved.editable).not.toContain('plan')
+    expect(resolved.context).toEqual([])
+  })
+
+  it('gives G1 the plan and everything earlier as read-only context', () => {
+    const resolved = resolveSections('supplement', 'G1-方案设计')
+    expect(resolved.editable).toEqual(['plan', 'gate12'])
+    expect(resolved.context).toContain('identity')
+    expect(resolved.context).toContain('gate0')
+    // A later stage has not happened, so it is not even context.
+    expect(resolved.context).not.toContain('outcome')
+  })
+
+  it('gives G3 the proof and nothing to re-plan', () => {
+    const resolved = resolveSections('supplement', 'G3-结果验证')
+    expect(resolved.editable).toEqual(['progress'])
+    expect(resolved.context).toContain('plan')
+  })
+
+  it('gives G4 the conclusion block', () => {
+    const resolved = resolveSections('supplement', 'G4-结果转化')
+    expect(resolved.editable).toContain('outcome')
+    expect(resolved.editable).toContain('progress')
+  })
+
+  it('gives the progress intent one section at any stage', () => {
+    for (const stage of ['G0-立项', 'G2-方案验证', 'G4-结果转化']) {
+      const resolved = resolveSections('progress', stage)
+      expect(resolved.editable).toEqual(['progress'])
+      expect(resolved.context).toEqual([])
+    }
+  })
+
+  it('treats an unrecognised stage as still being set up', () => {
+    // Better to ask for G0 again than to show a blank page to a colleague.
+    const resolved = resolveSections('supplement', 'G9-nonsense')
+    expect(resolved.editable).toContain('gate0')
+  })
+
+  it('keeps a G0 supplement free of the plan section', () => {
+    const { dom } = bootPage(projectForForm(RECORD))
+    const text = dom.window.document.getElementById('formBody')?.textContent ?? ''
+    expect(text).toContain('Gate 0 · 值不值得做')
+    expect(text).toContain('方案 · 只读')
+    expect(text).not.toContain('成功指标与测试场景')
+  })
+})
+
+/**
+ * The download is a change set, not a project file.
+ *
+ * The ledger's derived fields are owned by `tools/derive.mjs` and asserted by
+ * CI, so a form that wrote them would be wrong or overwritten. A form that
+ * omitted them would be rejected. The only shape that works is "the human half,
+ * merged by `poc-submit`".
+ */
+describe('change set output', () => {
+  it('carries the schema version a new project file needs', () => {
+    // The ledger refuses a file without it (E-VERSION), and a brand-new project
+    // has no existing file to inherit the stamp from.
+    const change = projectToChangeSet(projectForForm(RECORD))
+    expect(change.schema_version).toBe(FORM_SCHEMA_VERSION)
+  })
+
+  it('never writes a derived field', () => {
+    const change = projectToChangeSet(projectForForm(RECORD)) as unknown as Record<string, unknown>
+    const gate0 = change.gate0 as Record<string, unknown>
+    // These are computed by derive.mjs and asserted by CI.
+    expect(gate0).not.toHaveProperty('missing')
+    expect(gate0).not.toHaveProperty('complete')
+    expect(change).not.toHaveProperty('priority')
+    expect(change).not.toHaveProperty('gate_decisions')
+  })
+
+  it('collapses a blank field to null, not to the string ""', () => {
+    const blank = blankProject()
+    const change = projectToChangeSet(blank)
+    expect(change.gate0.decision_chain).toBeNull()
+    expect(change.owner).toBeNull()
+  })
+
+  it('keeps the scenario and criterion ids evidence hangs off', () => {
+    const change = projectToChangeSet(projectForForm(RECORD))
+    expect((change.plan.scenarios[0] as Record<string, unknown>).id).toBe('scn-01')
+    expect((change.plan.criteria[0] as Record<string, unknown>).id).toBe('cri-01')
+  })
+
+  it('emits only the rounds this form adds', () => {
+    const withHistory: PocRecord = {
+      ...RECORD,
+      progress: [{ seq: 1, date: '2026-10-01', actual: '第一轮' }],
+    }
+    const project = projectForForm(withHistory)
+    project.progress.date = '2026-11-19'
+    project.progress.actual = '第三轮'
+    project.progress.change = '证据补充'
+    const change = projectToChangeSet(project)
+    // One new round, never the existing history: the merge appends.
+    expect(change.progress).toHaveLength(1)
+    expect(change.progress[0]?.actual).toBe('第三轮')
+  })
+
+  it('omits the round entirely when the colleague recorded nothing', () => {
+    const change = projectToChangeSet(projectForForm(RECORD))
+    expect(change.progress).toEqual([])
   })
 })
 

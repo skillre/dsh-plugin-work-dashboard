@@ -146,11 +146,67 @@ export interface FormProject {
     progress: FormProgress;
     /** How many entries the project already has (so `seq` can continue). */
     existingProgressCount: number;
+    /**
+     * The G4 conclusion block.
+     *
+     * It was missing entirely: the form could collect a progress round but not the
+     * one thing a G4 project exists to state — what was proved, what the customer
+     * accepted, and what business step follows. Every field is optional because
+     * only a G4 form shows them.
+     */
+    outcome: {
+        achievement: string;
+        customer_recognition: string;
+        our_proof: string;
+        proved: string;
+        recognized: string;
+        next_business: string;
+        milestone: string;
+        businessOwner: string;
+        businessDeadline: string;
+        businessStatus: string;
+        overall: string;
+    };
 }
+/**
+ * What the colleague is here to do.
+ *
+ * Two orthogonal questions decide what the form asks, and conflating them is
+ * what made the old form a 20-field wall:
+ *
+ * - the **stage** says which fields are the subject (a G1 project is about the
+ *   plan, a G3 project is about the proof);
+ * - the **intent** says how deep to go (registering a new project, filling in
+ *   the current stage, or appending one round of progress).
+ *
+ * The same G2 project needs completely different forms for "first test" and
+ * "weekly sync", so a stage-only split would still force a colleague to scroll
+ * past everything they are not editing.
+ */
+export type FormIntent = 'new' | 'supplement' | 'progress';
+/** The section groups a form can show. Order is reading order. */
+export type FormSection = 'identity' | 'gate0' | 'plan' | 'gate12' | 'progress' | 'outcome';
+/**
+ * Resolve what a form should ask, given the intent and the project's stage.
+ *
+ * Returns the editable sections (the subject) and the context sections (shown
+ * read-only so the colleague knows what they are adding to). An unknown stage
+ * falls back to G0's set: a project whose stage is unrecognised is, for form
+ * purposes, still being set up.
+ */
+export declare function resolveSections(intent: FormIntent, stage: string): {
+    editable: FormSection[];
+    context: FormSection[];
+};
 /** Options for one generation run. */
 export interface FormOptions {
     /** `fill` pre-fills from the ledger; `blank` is an empty new-project form. */
     mode: 'fill' | 'blank';
+    /**
+     * What the colleague is doing. Defaults from `mode`: `blank` → `new`,
+     * `fill` → `supplement`. `progress` is the one-screen append form.
+     */
+    intent?: FormIntent;
     /** Projects to include; one blank project for `blank` mode. */
     projects: FormProject[];
     /** Clock injection so the generated header and default dates are testable. */
@@ -185,8 +241,107 @@ export declare function draftKeyFor(mode: 'fill' | 'blank', pocIds: readonly str
  * Empty plan/progress blocks are emitted as empty collections, not omitted: the
  * ledger's parser tolerates absence, but a colleague reopening the file should
  * see the shape they are expected to fill.
+ *
+ * **This is not the download format.** The form ships a change set (see
+ * {@link projectToChangeSet}); a complete file would have to carry the ledger's
+ * derived fields (`gate0.missing`, `priority`, scenario status), and those are
+ * owned by `tools/derive.mjs` — writing them here would either be wrong or be
+ * overwritten by CI. `projectToYaml` remains for tests and for a full-file
+ * preview.
  */
 export declare function projectToYaml(project: FormProject): string;
+/**
+ * One project's change set: what the colleague touched, and nothing else.
+ *
+ * ## Why a change set rather than a file
+ *
+ * A `projects/*.yaml` file carries three kinds of value: what a human wrote, what
+ * the ledger derives (`gate0.missing`, `gate0.complete`, `priority`, per-scenario
+ * status), and what the clock implies. Only the first belongs to a form. The
+ * derived ones are computed by `tools/derive.mjs` and asserted by CI, so a form
+ * that wrote them would either be wrong or be overwritten — and a form that
+ * omitted them would produce a file CI rejects.
+ *
+ * So the form ships only the human half, `poc-submit` merges it into the existing
+ * file (preserving everything it did not touch), and CI recomputes the rest.
+ *
+ * `schema_version` IS included even though it is a constant: the ledger refuses a
+ * file without it (`E-VERSION`), and a brand-new project has no existing file to
+ * inherit the stamp from.
+ */
+export interface FormChangeSet {
+    schema_version: string;
+    poc_id: string;
+    name: string;
+    org: {
+        system: string | null;
+        company: string | null;
+        department: string | null;
+    };
+    amount_wan: number | null;
+    poc_type: string | null;
+    owner: string | null;
+    sales: string | null;
+    tech_owner: string | null;
+    exec_sponsor: string | null;
+    stage: string;
+    status: string;
+    stage_since: string | null;
+    gate0: {
+        why_customer: string | null;
+        why_us: string | null;
+        decision_chain: string | null;
+        post_poc_decision: string | null;
+        competitor: string | null;
+        review: {
+            conclusion: string | null;
+            reviewer: string | null;
+            reviewed_at: string | null;
+        };
+    };
+    plan: {
+        customer_pain: string | null;
+        expected_recognition: string | null;
+        our_edge: string | null;
+        criteria: Array<Record<string, unknown>>;
+        scenarios: Array<Record<string, unknown>>;
+        risks: Array<Record<string, unknown>>;
+        timeline: {
+            start: string | null;
+            end: string | null;
+        };
+        gate1: {
+            conclusion: string | null;
+        };
+        gate2: {
+            ready: string | null;
+        };
+    };
+    /** The rounds this form ADDS; empty when the colleague recorded none. */
+    progress: Array<Record<string, unknown>>;
+}
+/**
+ * Build one project's change set from the form state.
+ *
+ * Every field the form can edit appears, so `poc-submit` can apply the whole
+ * object with `setIfPresent` semantics: a blank field means "I did not change
+ * this", which the merge step must not read as "delete it".
+ */
+export declare function projectToChangeSet(project: FormProject): FormChangeSet;
+/** The whole download: one change set per project, plus provenance. */
+export interface FormChangeDocument {
+    schemaVersion: string;
+    generatedAt: string;
+    generatedBy: string;
+    intent: FormIntent;
+    changes: FormChangeSet[];
+}
+/** Build the document a colleague sends back. */
+export declare function buildChangeDocument(options: {
+    projects: readonly FormProject[];
+    intent: FormIntent;
+    now?: Date;
+}): FormChangeDocument;
 /** The enums, mirrored from `schemas/enums.yaml`. */
 declare const ENUMS: {
     pocType: string[];
@@ -204,26 +359,50 @@ declare const ENUMS: {
     gate3_2: string[];
     evidenceType: string[];
     system: string[];
+    achievement: string[];
+    businessStatus: string[];
 };
 /**
  * The schema generation this form emits.
  *
  * Stamped into every generated page so a returned form can be checked against
- * the schema that will read it. A v3.0 form uses `items` and string scenarios;
- * importing it as v3.1 would silently drop every scenario and criterion
- * reference, which is exactly the failure this constant exists to catch.
+ * the schema that will read it. There is deliberately **no older-shape
+ * fallback**: the ledger declares one shape version and its validator rejects
+ * anything else outright (`E-VERSION`). A tolerant reader here would only move
+ * that failure later — to a point where the colleague already believes their
+ * work was recorded.
  */
 export declare const FORM_SCHEMA_VERSION = "3.1";
-/** The schema generation a v3.0 form emitted; recognised only to reject it. */
+/**
+ * The stamp a pre-v3.1 form carries.
+ *
+ * A named constant only so the refusal message can name it. This is not a
+ * supported shape: nothing parses it, nothing converts it, and importing one is
+ * refused rather than half-applied.
+ */
 export declare const LEGACY_FORM_SCHEMA_VERSION = "3.0";
 /** The state the generated page boots from. */
 export interface FormPayload {
     mode: 'fill' | 'blank';
+    /** What the colleague is doing; decides how much of the page is editable. */
+    intent: FormIntent;
     /** The schema this page writes. Absent means a pre-v3.1 form. */
     schemaVersion: string;
     generatedAt: string;
     today: string;
     projects: FormProject[];
+    /**
+     * Per-project section resolution, index-aligned with `projects`.
+     *
+     * Resolved on the Host rather than in the page because the mapping is a
+     * statement about the ledger's own structure, and the browser has no way to
+     * check it. Sending it also keeps the payload inspectable: reading the JSON
+     * tells you exactly what the page will let you edit.
+     */
+    sections: Array<{
+        editable: FormSection[];
+        context: FormSection[];
+    }>;
     draftKey: string;
     enums: typeof ENUMS;
     /** The G0 fields, in schema order, with their prompt text. */
@@ -254,13 +433,14 @@ export { YAML };
  * Whether a returned form was generated by this schema generation.
  *
  * `poc-export` produces a standalone HTML file that colleagues fill in offline,
- * so **old copies keep circulating** long after the schema moves. The v3.0 form
- * carries `progress[].items` and a string array of scenarios; reading it as v3.1
- * would drop every scenario and criterion reference without an error, and the
- * ledger's whole proof chain hangs off those ids.
+ * so **old copies keep circulating** long after the schema moves. A pre-v3.1
+ * form carries `progress[].items` and a string array of scenarios; reading it as
+ * v3.1 would drop every scenario and criterion reference without an error, and
+ * the ledger's whole proof chain hangs off those ids.
  *
  * So this is a hard gate rather than a tolerant reader: a stale form is refused
- * with an explanation, not silently half-imported.
+ * with an explanation, not silently half-imported. There is no conversion path
+ * and none is planned — the ledger itself rejects any other shape version.
  */
 export interface FormCompatibility {
     compatible: boolean;

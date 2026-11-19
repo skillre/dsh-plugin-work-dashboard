@@ -45,9 +45,12 @@ export interface ConsoleActions {
     /**
      * Build the collection form for one batch.
      *
-     * `blank` ignores `pocIds` and returns the new-project form.
+     * `intent` decides how much of the page is editable: `new` registers a
+     * project, `supplement` fills in the current stage, `progress` appends one
+     * round. It defaults from `mode` when omitted, so an older caller keeps
+     * working.
      */
-    exportForm(mode: 'fill' | 'blank', pocIds: readonly string[]): Promise<ExportFormResult>;
+    exportForm(mode: 'fill' | 'blank', pocIds: readonly string[], intent?: 'new' | 'supplement' | 'progress'): Promise<ExportFormResult>;
 }
 /**
  * Build the exact route Connection registers; every failure stays inside the

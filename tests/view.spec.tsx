@@ -338,10 +338,10 @@ function makeApi(options: {
   refreshed?: Snapshot
   detailRecord?: ProjectDetail
   failRefresh?: string
-} = {}): ClientApi & { refreshCalls: number; lastExport?: { mode: string; pocIds: string[] } } {
+} = {}): ClientApi & { refreshCalls: number; lastExport?: { mode: string; pocIds: string[]; intent?: string } } {
   const api = {
     refreshCalls: 0,
-    lastExport: undefined as { mode: string; pocIds: string[] } | undefined,
+    lastExport: undefined as { mode: string; pocIds: string[]; intent?: string } | undefined,
     async list() {
       return options.initial ?? snapshot()
     },
@@ -395,10 +395,9 @@ function makeApi(options: {
         silentProjects: [{ pocId: 'POC-2026-002', pocName: '某某集团办公网改造' }],
       }
     },
-    async exportForm(mode: string, pocIds: readonly string[]) {
-      // The dialog decides fill-vs-blank from the selection, so the test only
-      // needs to observe what the Host was asked for.
-      api.lastExport = { mode, pocIds: [...pocIds] }
+    async exportForm(mode: string, pocIds: readonly string[], intent?: string) {
+      // The dialog decides the mode from the intent, so the test observes both.
+      api.lastExport = { mode, pocIds: [...pocIds], ...(intent === undefined ? {} : { intent }) }
       return {
         html: '<!DOCTYPE html><html><body>form</body></html>',
         fileName: mode === 'blank' ? 'blank.html' : `form-${pocIds.length}.html`,
@@ -406,7 +405,7 @@ function makeApi(options: {
       }
     },
   }
-  return api as unknown as ClientApi & { refreshCalls: number; lastExport?: { mode: string; pocIds: string[] } }
+  return api as unknown as ClientApi & { refreshCalls: number; lastExport?: { mode: string; pocIds: string[]; intent?: string } }
 }
 
 /** Render the page and wait for the initial load to settle. */
@@ -758,18 +757,30 @@ describe('export form', () => {
     expect(api.lastExport?.pocIds.length).toBe(2)
   })
 
-  it('asks for a blank form when nothing is selected', async () => {
+  it('asks for a blank form when the new-project intent is chosen', async () => {
+    // "Empty selection" used to mean "new project" implicitly. It is now an
+    // explicit intent, because the same dialog also produces a one-screen
+    // progress form and the two must not be confused.
     const api = makeApi()
     await renderPage(api)
     fireEvent.click(screen.getByRole('button', { name: '导出表单' }))
-    fireEvent.click(screen.getByRole('button', { name: '清空' }))
-    // With an empty selection the dialog explains it will produce a new-project
-    // form, which is a normal path rather than an error.
-    expect(document.querySelector('.helper-box')?.textContent).toContain('空白')
+    fireEvent.click(screen.getByRole('button', { name: /新建项目/ }))
     fireEvent.click(screen.getByRole('button', { name: '生成并下载' }))
     await waitFor(() => expect(api.lastExport).toBeDefined())
     expect(api.lastExport?.mode).toBe('blank')
     expect(api.lastExport?.pocIds).toEqual([])
+    expect(api.lastExport?.intent).toBe('new')
+  })
+
+  it('passes the chosen intent through to the Host', async () => {
+    const api = makeApi()
+    await renderPage(api)
+    fireEvent.click(screen.getByRole('button', { name: '导出表单' }))
+    fireEvent.click(screen.getByRole('button', { name: /记录进展/ }))
+    fireEvent.click(screen.getByRole('button', { name: '生成并下载' }))
+    await waitFor(() => expect(api.lastExport).toBeDefined())
+    expect(api.lastExport?.intent).toBe('progress')
+    expect(api.lastExport?.mode).toBe('fill')
   })
 
   it('closes on a successful download', async () => {
