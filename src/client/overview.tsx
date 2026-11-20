@@ -145,7 +145,7 @@ function ProjectCard({ project, selected, locale, t, onOpen }: { project: Projec
         {project.progressCount === 0 ? (
           <span className="pcard-progress-copy is-muted">{t('cardNoProgress')}</span>
         ) : (
-          <span className="pcard-progress-copy">{project.lastProgressSummary === '' ? t('emptyField') : project.lastProgressSummary}</span>
+          <span className="pcard-progress-copy" title={project.lastProgressSummary === '' ? undefined : project.lastProgressSummary}>{project.lastProgressSummary === '' ? t('emptyField') : project.lastProgressSummary}</span>
         )}
         {project.progressCount === 0 ? null : (
           <span className="pcard-progress-meta">
@@ -201,7 +201,7 @@ function BoardCard({ project, t, onOpen }: { project: ProjectSummary; t: Transla
       {project.progressCount === 0 ? (
         <span className="pboard-card-progress is-muted">{t('cardNoProgress')}</span>
       ) : (
-        <span className="pboard-card-progress">{project.lastProgressSummary === '' ? t('emptyField') : project.lastProgressSummary}</span>
+        <span className="pboard-card-progress" title={project.lastProgressSummary === '' ? undefined : project.lastProgressSummary}>{project.lastProgressSummary === '' ? t('emptyField') : project.lastProgressSummary}</span>
       )}
       {project.highGapCount > 0 ? (
         <span className="pboard-card-gap" data-tone="red">{format(t('boardHighBadge'), { count: project.highGapCount })}</span>
@@ -353,7 +353,7 @@ function ProjectTable({ projects, selectedId, locale, t, sortKey, sortAsc, onSor
                   <span className="project-meta is-muted">{t('cardNoProgress')}</span>
                 ) : (
                   <>
-                    <span className="progress-summary">{project.lastProgressSummary === '' ? t('emptyField') : project.lastProgressSummary}</span>
+                    <span className="progress-summary" title={project.lastProgressSummary === '' ? undefined : project.lastProgressSummary}>{project.lastProgressSummary === '' ? t('emptyField') : project.lastProgressSummary}</span>
                     <span className="project-id">
                       {format(t('tableProgressCell'), { date: formatDate(project.lastProgressDate, locale), count: project.progressCount })}
                     </span>
