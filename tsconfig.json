@@ -14,5 +14,6 @@
     "types": ["node", "vitest/globals"]
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"],
-  "exclude": ["tests/form.spec.ts", "tests/view.spec.tsx", "tests/jsdom.d.ts"]
+  "exclude": ["tests/form.spec.ts", "tests/view.spec.tsx",
+    "tests/browser-text.spec.tsx", "tests/jsdom.d.ts"]
 }

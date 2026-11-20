@@ -1,0 +1,36 @@
+Browser check evidence — tests/browser-text.spec.ts
+Recorded 2026-11-20 against DSH 0.2.2-rc.5.
+
+Method
+------
+Real store (RepoCache + PocStore) loading a git-backed ledger checkout, real
+DetailPage rendered through react-dom/server, loaded by headless Chrome at
+1440px over a loopback HTTP server, measured through CDP Runtime.evaluate.
+
+The measurement compares scrollHeight against clientHeight on every element
+matching .g0-card[data-prose="true"] .g0-card-body. Any positive difference
+means the element is hiding content.
+
+Run
+---
+WORK_DASHBOARD_LEDGER=<ledger> npx vitest run tests/browser-text.spec.ts
+
+Result
+------
+proof passed: 9 projects rendered, 18 argument cards measured
+- clipped cards:            0
+- white-space (distinct):   ["pre-wrap"]
+- line-clamp (distinct):    ["none"]
+- deepest argument field:   11 lines, fully visible
+
+Mutation test
+-------------
+Reintroducing `-webkit-line-clamp: 3` on the prose rule makes the same check
+fail, reporting per-card hidden pixel counts of 17–85px. The check therefore
+detects the exact regression it exists to catch, rather than passing vacuously.
+
+Why a browser, not just a CSS assertion
+---------------------------------------
+tests/css-contract.spec.ts already asserts the rule text. That assertion passed
+on the broken build too: the clamp was defined twice in detail.ts, and the later
+copy overrode the earlier one. Only a real layout proves which copy won.

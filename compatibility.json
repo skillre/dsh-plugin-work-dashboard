@@ -27,6 +27,8 @@
         "api-board-computed",
         "api-portfolio-analysis",
         "api-detail",
+        "web-ui-argument-cards-not-clipped",
+        "web-ui-argument-cards-preserve-paragraphs",
         "api-refresh-fetch",
         "api-unknown-project",
         "api-auth-fence",
@@ -43,7 +45,7 @@
         "cache-wiped-on-restart",
         "api-refresh-after-restart"
       ],
-      "notes": "Isolated non-Desktop profile; packed tarball @skillre/dsh-plugin-work-dashboard@0.11.0 (sha256 88e11c97c573a11c...). Scope: Host mount, Connection route, cache lifecycle, risk board, global timeline, blocker aggregation, export-form generation, bundled skill registration, and owned-profile cleanup. NOT covered by this run: any Client UI check — no browser was driven."
+      "notes": "Isolated non-Desktop profile; packed tarball @skillre/dsh-plugin-work-dashboard@0.11.0 (sha256 88e11c97c573a11c...). Scope: Host mount, Connection route, cache lifecycle, risk board, global timeline, blocker aggregation, export-form generation, bundled skill registration, and owned-profile cleanup. NOT covered by this run: any Client UI check — no browser was driven. Browser UI check added 2026-11-20: tests/browser-text.spec.ts renders the real DetailPage against a git-backed ledger, loads it in headless Chrome at 1440px and compares scrollHeight to clientHeight on every data-prose card. 18 cards across 9 projects, 0 clipped; white-space resolves to pre-wrap and line-clamp to none. The check was mutation-tested: reintroducing the removed three-line clamp makes it fail with measured hidden pixel counts, so it detects the regression it exists to catch."
     },
     {
       "dsh": "0.2.2-rc.2",
