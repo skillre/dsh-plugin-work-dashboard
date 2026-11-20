@@ -11,6 +11,7 @@ import {
   formFileName,
   projectForForm,
   projectToChangeSet,
+  readReturnDocument,
   resolveSections,
   projectToYaml,
   yamlFileName,
@@ -291,7 +292,8 @@ describe('the generated page', () => {
     expect(text).toContain('成功指标与测试场景')
     expect(text).toContain('方案要点')
     // Gate 0 is already done at G1: it is shown, but as a read-only summary.
-    expect(text).toContain('Gate 0 · 只读')
+    // Gate 0 and identity are earlier stages: shown read-only, not editable.
+    expect(text).toContain('Gate 0 · 值不值得做')
     expect(text).toContain('基本信息 · 只读')
     // Identity renders as a summary line, not as editable inputs.
     expect(text).toContain('POC-2026-007')
@@ -347,10 +349,18 @@ describe('the generated page', () => {
   it('builds a blank form with the required identity fields empty', () => {
     const { dom } = boot({ mode: 'blank' })
     const id = dom.window.document.querySelector('[data-path="pocId"]') as HTMLInputElement
+    expect(id).toBeTruthy()
     expect(id.value).toBe('')
-    // A blank form starts at G0, the only stage a new project can begin in.
-    const stage = dom.window.document.querySelector('[data-path="stage"]') as HTMLSelectElement
+    // A new project's number is the one thing the colleague must supply; it is
+    // locked on a fill form (the ledger owns it) but editable here.
+    expect(id.disabled).toBe(false)
+    // A blank form starts at G0, the only stage a new project can begin in. The
+    // stage is LOCKED (advancing it is a Gate decision, not a form field), so it
+    // is found by its field wrapper and asserted through its selected option.
+    const stage = dom.window.document.querySelector('[data-field="stage"] select') as HTMLSelectElement
+    expect(stage).toBeTruthy()
     expect(stage.value).toBe('G0-立项')
+    expect(stage.disabled).toBe(true)
   })
 })
 
@@ -525,10 +535,14 @@ describe('progress pickers', () => {
     expect(picked.checked).toBe(true)
   })
 
-  it('says what to do first when the plan has nothing to pick', () => {
+  it('says the plan is empty, in one line, instead of explaining it twice', () => {
+    // A G0/new project has no plan by design, so an empty picker is normal. The
+    // block used to print two help paragraphs; one muted line is the fix.
     const empty: FormProject = { ...blankProject() }
     const { dom } = bootPage(empty)
-    expect(dom.window.document.body.textContent ?? '').toContain('先在左边的计划里加上')
+    const text = dom.window.document.body.textContent ?? ''
+    expect(text).toContain('还没有可选项')
+    expect(text).not.toContain('先在左边的计划里加上')
   })
 })
 
@@ -589,8 +603,11 @@ describe('stage and intent decide the subject', () => {
     const { dom } = bootPage(projectForForm(RECORD))
     const text = dom.window.document.getElementById('formBody')?.textContent ?? ''
     expect(text).toContain('Gate 0 · 值不值得做')
-    expect(text).toContain('方案 · 只读')
+    // The plan is a LATER stage than G0, so it is neither editable nor context:
+    // it must not appear at all, in any form.
     expect(text).not.toContain('成功指标与测试场景')
+    expect(text).not.toContain('方案 · 已确认内容')
+    expect(text).not.toContain('方案 · 只读')
   })
 })
 
@@ -628,7 +645,9 @@ describe('change set output', () => {
   })
 
   it('keeps the scenario and criterion ids evidence hangs off', () => {
-    const change = projectToChangeSet(projectForForm(RECORD))
+    // RECORD sits at G0, where the plan is not in scope; ask for a G1 project so
+    // the plan block is actually emitted.
+    const change = projectToChangeSet(projectForForm({ ...RECORD, stage: 'G1-方案设计' }))
     expect((change.plan.scenarios[0] as Record<string, unknown>).id).toBe('scn-01')
     expect((change.plan.criteria[0] as Record<string, unknown>).id).toBe('cri-01')
   })
@@ -642,7 +661,7 @@ describe('change set output', () => {
     project.progress.date = '2026-11-19'
     project.progress.actual = '第三轮'
     project.progress.change = '证据补充'
-    const change = projectToChangeSet(project)
+    const change = projectToChangeSet(project, 'progress')
     // One new round, never the existing history: the merge appends.
     expect(change.progress).toHaveLength(1)
     expect(change.progress[0]?.actual).toBe('第三轮')
@@ -695,5 +714,342 @@ describe('generated page emits v3.1 YAML', () => {
     expect(html).not.toMatch(/<script[^>]+src=/i)
     expect(html).toContain('<html')
     expect(html).toContain('</html>')
+  })
+})
+
+/**
+ * Regressions for the three defects that made the shipped form unusable.
+ *
+ * Each one is pinned here because each was invisible to the type checker and to
+ * the existing tests: they are behaviours of the generated page and of the
+ * returned file, not of the Host's serializers.
+ */
+describe('the download is not blocked by fields the page never showed', () => {
+  /** Boot a page and return its window plus the rendered body text. */
+  function bootFor(intent: 'new' | 'supplement' | 'progress', stage: string): JSDOM {
+    return new JSDOM(
+      buildFormHtml({
+        mode: intent === 'new' ? 'blank' : 'fill',
+        intent,
+        projects: intent === 'new' ? [] : [projectForForm({ ...RECORD, stage })],
+        now: new Date('2026-11-20T00:00:00Z'),
+      }),
+      { runScripts: 'dangerously', url: 'https://local.invalid/form.html' },
+    )
+  }
+
+  /**
+   * The bug: `validateRequired` demanded `progress.date/change/actual/next.goal`
+   * on EVERY form, but a G0 supplement does not render the progress block at all.
+   * Those four values were empty by construction, so no amount of filling could
+   * satisfy them and every supplement/new/batch form refused to download forever.
+   */
+  it('does not require progress fields on a G0 supplement, which has none', () => {
+    const dom = bootFor('supplement', 'G0-立项')
+    const doc = dom.window.document
+    // The page genuinely has no progress block at this stage.
+    expect(doc.querySelector('[data-path="progress.date"]')).toBeNull()
+    // And the validator therefore must not demand it. It is reachable only through
+    // the download handler, so assert on what the handler would check by reading
+    // the same scope the page was built from.
+    const scope = resolveSections('supplement', 'G0-立项')
+    expect(scope.editable).not.toContain('progress')
+  })
+
+  it('requires the progress fields on a form that does show them', () => {
+    const dom = bootFor('progress', 'G3-结果验证')
+    const doc = dom.window.document
+    expect(doc.querySelector('[data-path="progress.date"]')).toBeTruthy()
+    const scope = resolveSections('progress', 'G3-结果验证')
+    expect(scope.editable).toEqual(['progress'])
+  })
+})
+
+describe('the returned file carries the answers back', () => {
+  /** A page whose change set can be produced without a browser. */
+  const withRound = (): FormProject => {
+    const project = projectForForm({ ...RECORD, stage: 'G3-结果验证' })
+    project.progress.date = '2026-11-20'
+    project.progress.type = '客户阶段同步'
+    project.progress.change = '证据补充'
+    project.progress.actual = '完成真实业务代码扫描，误报率 3%'
+    project.progress.next.goal = '出对比报告'
+    return project
+  }
+
+  it('reads a .json change set', () => {
+    const doc = { schemaVersion: FORM_SCHEMA_VERSION, generatedAt: '2026-11-20T00:00:00Z', generatedBy: 'x', intent: 'progress', changes: [] }
+    const result = readReturnDocument(JSON.stringify(doc))
+    expect(result.document).not.toBeNull()
+    expect(result.reason).toBe('')
+  })
+
+  /**
+   * The bug: a colleague filled the HTML, forwarded the FILE, and the answers were
+   * gone — they lived only in localStorage. The returned page now embeds the change
+   * set, so forwarding the file forwards the work.
+   */
+  it('reads the data block a returned page embeds', () => {
+    const doc = {
+      schemaVersion: FORM_SCHEMA_VERSION,
+      generatedAt: '2026-11-20T00:00:00Z',
+      generatedBy: 'POC 信息收集表单 v3.1',
+      intent: 'progress' as const,
+      changes: [projectToChangeSet(withRound(), 'progress')],
+    }
+    const page = `<html><body><script type="application/json" id="poc-return-data">${JSON.stringify(doc)}</script></body></html>`
+    const result = readReturnDocument(page)
+    expect(result.document).not.toBeNull()
+    expect(result.document?.changes[0]?.progress[0]?.actual).toBe('完成真实业务代码扫描，误报率 3%')
+  })
+
+  /**
+   * A blank form also contains the marker — inside the page's own generator source.
+   * A single `indexOf` found that copy first and reported "the data block is
+   * corrupt" instead of the truth: this form was never filled in.
+   */
+  it('refuses a blank form with the real reason, not a parse error', () => {
+    const blank = buildFormHtml({ mode: 'fill', projects: [projectForForm(RECORD)], now: new Date('2026-11-20T00:00:00Z') })
+    const result = readReturnDocument(blank)
+    expect(result.document).toBeNull()
+    // It must say "not filled in", never "corrupt".
+    expect(result.reason).toContain('空白表单')
+    expect(result.reason).not.toContain('改坏')
+  })
+
+  it('refuses a pre-v3.1 form through the same schema gate', () => {
+    const legacy = { schemaVersion: LEGACY_FORM_SCHEMA_VERSION, generatedAt: '', generatedBy: '', intent: 'progress', changes: [] }
+    const result = readReturnDocument(JSON.stringify(legacy))
+    expect(result.document).toBeNull()
+    expect(result.reason).toContain('v3.0')
+  })
+
+  it('refuses text that is neither JSON nor a form', () => {
+    expect(readReturnDocument('hello').document).toBeNull()
+    expect(readReturnDocument('').document).toBeNull()
+    expect(readReturnDocument('{ not json').document).toBeNull()
+  })
+})
+
+/**
+ * The change set is scoped to what the colleague could edit.
+ *
+ * Without this, a `progress` form re-sent every field it had pre-filled from the
+ * ledger, and `poc-submit`'s "skip null, apply the rest" merge wrote them back —
+ * silently reverting anything that changed while the form sat in WeChat.
+ */
+describe('a change set only carries what its intent could edit', () => {
+  it('sends nothing but the round from a progress form', () => {
+    const project = projectForForm(RECORD)
+    project.progress.date = '2026-11-20'
+    project.progress.change = '证据补充'
+    project.progress.actual = '压测完成'
+    project.progress.next.goal = '出报告'
+    const change = projectToChangeSet(project, 'progress')
+    // Identity and Gate 0 were read-only on that page, so they must not be resent.
+    expect(change.name).toBe('')
+    expect(change.owner).toBeNull()
+    expect(change.gate0.why_customer).toBeNull()
+    expect(change.plan.customer_pain).toBeNull()
+    expect(change.plan.criteria).toEqual([])
+    expect(change.progress).toHaveLength(1)
+  })
+
+  it('sends the G0 block from a G0 supplement', () => {
+    const change = projectToChangeSet(projectForForm(RECORD), 'supplement')
+    expect(change.gate0.why_customer).toBe('客户要做等保合规改造')
+    // RECORD is at G0, so the plan is a LATER stage and is not in scope.
+    expect(change.plan.customer_pain).toBeNull()
+  })
+
+  it('sends the plan from a G1 supplement', () => {
+    const change = projectToChangeSet(projectForForm({ ...RECORD, stage: 'G1-方案设计' }), 'supplement')
+    expect(change.plan.customer_pain).toBe('现有接入体验差')
+  })
+
+  /**
+   * The G4 conclusion block was editable on the page but absent from every change
+   * set, so a G4 colleague's answers were dropped on download without a word.
+   */
+  it('carries the G4 conclusion block a G4 form collects', () => {
+    const project = projectForForm({ ...RECORD, stage: 'G4-结果转化' })
+    project.outcome.proved = '证明了 200 人并发稳定'
+    project.outcome.recognized = '客户认可性能'
+    project.outcome.next_business = '转采购'
+    project.outcome.overall = '整体达成'
+    const change = projectToChangeSet(project, 'supplement')
+    expect(change.outcome.conclusion.proved).toBe('证明了 200 人并发稳定')
+    expect(change.outcome.conclusion.recognized).toBe('客户认可性能')
+    expect(change.outcome.conclusion.next_business).toBe('转采购')
+    expect(change.outcome.overall).toBe('整体达成')
+  })
+
+  it('always keeps the stage and status the ledger routes on', () => {
+    const change = projectToChangeSet(projectForForm(RECORD), 'progress')
+    expect(change.stage).toBe('G0-立项')
+    expect(change.status).toBe('进行中')
+  })
+})
+
+/**
+ * The page shows the project's real state instead of only counts.
+ *
+ * "看不清项目情况" was literal: the read-only context blocks printed "指标 0 ·
+ * 场景 0" and nothing else, and the recorded rounds were never shown at all.
+ */
+describe('the page shows what the project actually says', () => {
+  const withHistory = (): PocRecord => ({
+    ...RECORD,
+    progress: [
+      { seq: 1, date: '2026-10-01', change: '阶段推进', actual: '完成样本测试', customer: { synced_with: '王工', recognition: '部分认可' } },
+      { seq: 2, date: '2026-11-02', change: '证据补充', actual: '客户已批 GPU', evidence: [{ title: '压测报告' }] },
+    ],
+  })
+
+  it('lists the recorded rounds, newest first', () => {
+    const dom = new JSDOM(
+      buildFormHtml({ mode: 'fill', intent: 'progress', projects: [projectForForm(withHistory())], now: new Date('2026-11-20T00:00:00Z') }),
+      { runScripts: 'dangerously', url: 'https://local.invalid/form.html' },
+    )
+    const text = dom.window.document.getElementById('formBody')?.textContent ?? ''
+    expect(text).toContain('已有进展')
+    expect(text).toContain('客户已批 GPU')
+    expect(text).toContain('完成样本测试')
+    // Newest first: seq 2 appears before seq 1.
+    expect(text.indexOf('客户已批 GPU')).toBeLessThan(text.indexOf('完成样本测试'))
+  })
+
+  it('shows the snapshot strip with real numbers, not just a title', () => {
+    const dom = new JSDOM(
+      buildFormHtml({ mode: 'fill', intent: 'progress', projects: [projectForForm(withHistory())], now: new Date('2026-11-20T00:00:00Z') }),
+      { runScripts: 'dangerously', url: 'https://local.invalid/form.html' },
+    )
+    const doc = dom.window.document
+    expect(doc.querySelector('.snapshot')).toBeTruthy()
+    const text = doc.querySelector('.snapshot')?.textContent ?? ''
+    expect(text).toContain('Gate 0 五必填')
+    expect(text).toContain('2 轮')
+  })
+
+  it('renders the G0 answers as context once G0 is a past stage', () => {
+    const dom = new JSDOM(
+      buildFormHtml({
+        mode: 'fill',
+        intent: 'supplement',
+        projects: [projectForForm({ ...RECORD, stage: 'G1-方案设计' })],
+        now: new Date('2026-11-20T00:00:00Z'),
+      }),
+      { runScripts: 'dangerously', url: 'https://local.invalid/form.html' },
+    )
+    const text = dom.window.document.getElementById('formBody')?.textContent ?? ''
+    // The actual argument text, not only "五必填 5 / 5".
+    expect(text).toContain('客户要做等保合规改造')
+  })
+
+  it('never shows a later stage as read-only context on an earlier one', () => {
+    const dom = new JSDOM(
+      buildFormHtml({
+        mode: 'fill',
+        intent: 'supplement',
+        projects: [projectForForm(RECORD)],
+        now: new Date('2026-11-20T00:00:00Z'),
+      }),
+      { runScripts: 'dangerously', url: 'https://local.invalid/form.html' },
+    )
+    const text = dom.window.document.getElementById('formBody')?.textContent ?? ''
+    // A G0 project has no plan: showing "方案 · 已确认内容" invented work that does
+    // not exist, and told the colleague they were at a stage they have not reached.
+    expect(text).not.toContain('方案 · 已确认内容')
+    expect(text).not.toContain('指标 0')
+  })
+
+  it('locks the routing keys a form must not rewrite', () => {
+    const dom = new JSDOM(
+      buildFormHtml({ mode: 'fill', intent: 'supplement', projects: [projectForForm(RECORD)], now: new Date('2026-11-20T00:00:00Z') }),
+      { runScripts: 'dangerously', url: 'https://local.invalid/form.html' },
+    )
+    const doc = dom.window.document
+    // Stage and status advance through Gate review, not by editing a field.
+    expect((doc.querySelector('[data-field="stage"] select') as HTMLSelectElement).disabled).toBe(true)
+    expect((doc.querySelector('[data-field="status"] select') as HTMLSelectElement).disabled).toBe(true)
+    // The project id is the ledger's primary key on a fill form.
+    expect((doc.querySelector('[data-field="pocId"] input') as HTMLInputElement).disabled).toBe(true)
+  })
+
+  it('renders the client technical owner exactly once', () => {
+    // It was drawn twice — once in the Gate 0 grid and once in the identity card —
+    // with the same data-path, so two inputs owned one value and the stale copy won.
+    const dom = new JSDOM(
+      buildFormHtml({ mode: 'fill', intent: 'supplement', projects: [projectForForm(RECORD)], now: new Date('2026-11-20T00:00:00Z') }),
+      { runScripts: 'dangerously', url: 'https://local.invalid/form.html' },
+    )
+    const inputs = dom.window.document.querySelectorAll('[data-path="techOwner"]')
+    expect(inputs.length).toBe(1)
+  })
+})
+
+/**
+ * A change set carries only what the colleague actually edited.
+ *
+ * The page pre-fills every field from the ledger, and `poc-submit` merges with
+ * "skip null, apply the rest". So a change set built from the whole project
+ * re-sends every untouched pre-filled value — and anything another person changed
+ * while the form sat in WeChat gets reverted to the export-day snapshot. That is
+ * silent data loss, and it is the reason the baseline exists.
+ */
+describe('a change set diffs against the values it was generated with', () => {
+  /** A project with a filled Gate 0 and a plan, so there is something to diff. */
+  const seeded = (): FormProject => {
+    const project = projectForForm({ ...RECORD, stage: 'G1-方案设计' })
+    project.gate0.decision_chain = '原决策链'
+    project.plan.customer_pain = '原痛点'
+    return project
+  }
+
+  it('omits a field the colleague never touched', () => {
+    const baseline = seeded()
+    const edited = JSON.parse(JSON.stringify(baseline)) as FormProject
+    edited.plan.customer_pain = '改过的痛点'
+    const change = projectToChangeSet(edited, 'supplement', baseline)
+    expect(change.plan.customer_pain).toBe('改过的痛点')
+    // Untouched neighbours must not be re-sent.
+    expect(change.plan.expected_recognition).toBeNull()
+    expect(change.plan.our_edge).toBeNull()
+  })
+
+  it('omits every field when nothing changed at all', () => {
+    const baseline = seeded()
+    const change = projectToChangeSet(JSON.parse(JSON.stringify(baseline)) as FormProject, 'supplement', baseline)
+    expect(change.plan.customer_pain).toBeNull()
+    expect(change.gate0.decision_chain).toBeNull()
+    expect(change.plan.criteria).toEqual([])
+    expect(change.plan.scenarios).toEqual([])
+  })
+
+  it('still sends the edited field when only one changed', () => {
+    // A G0 project, so Gate 0 is the block in scope.
+    const baseline = projectForForm(RECORD)
+    const edited = JSON.parse(JSON.stringify(baseline)) as FormProject
+    edited.gate0.decision_chain = '组员改过的决策链'
+    const change = projectToChangeSet(edited, 'supplement', baseline)
+    expect(change.gate0.decision_chain).toBe('组员改过的决策链')
+    expect(change.gate0.why_customer).toBeNull()
+  })
+
+  it('sends a whole list once any row in it changed', () => {
+    const baseline = seeded()
+    const edited = JSON.parse(JSON.stringify(baseline)) as FormProject
+    edited.plan.scenarios = [...edited.plan.scenarios, { id: 'scn-09', name: '新场景', goal: '' }]
+    const change = projectToChangeSet(edited, 'supplement', baseline)
+    // The merge replaces a list wholesale, so a changed list is sent in full.
+    expect(change.plan.scenarios.length).toBe(edited.plan.scenarios.length)
+  })
+
+  it('behaves as before when no baseline is supplied', () => {
+    // An older caller keeps the previous contract rather than silently changing
+    // meaning: everything in scope is emitted. (seeded() is G1, so the plan is in
+    // scope and Gate 0 is not.)
+    const change = projectToChangeSet(seeded(), 'supplement')
+    expect(change.plan.customer_pain).toBe('原痛点')
   })
 })

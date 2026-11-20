@@ -35,7 +35,7 @@
  * commits; submission stays a human-merged PR, which is the ledger's design.
  */
 import YAML from 'yaml';
-import type { PocRecord } from './types.js';
+import type { PocRecord, ProgressRecord } from './types.js';
 /** The four G0 prerequisites that live under `gate0` (the fifth is identity). */
 export declare const G0_FIELDS: readonly ["why_customer", "why_us", "decision_chain", "post_poc_decision"];
 /** One plan criterion, as the form edits it. */
@@ -99,6 +99,35 @@ export interface FormProgress {
     };
 }
 /**
+ * One already-recorded progress round, as the form shows it read-only.
+ *
+ * This exists because the form used to say only "已有 3 条进展" and never showed
+ * them. Two concrete failures came from that:
+ *
+ * - the colleague could not see what had already been reported, so the same
+ *   round was filed twice under different wording;
+ * - the reviewer opening a returned form could not see the story the new round
+ *   was supposed to continue, so "这次什么变了" was unverifiable.
+ *
+ * Read-only by construction: v3 history is append-only, and the form's job is to
+ * add a round, never to rewrite one.
+ */
+export interface FormHistoryEntry {
+    seq: number | null;
+    date: string;
+    type: string;
+    change: string;
+    actual: string;
+    completion: string;
+    /** Evidence titles, already flattened: the form only lists them. */
+    evidence: string[];
+    syncedWith: string;
+    recognition: string;
+    nextGoal: string;
+    nextOwner: string;
+    nextDeadline: string;
+}
+/**
  * The project shape the form edits.
  *
  * A flat, all-strings view of one `PocRecord` plus its pending progress entry.
@@ -146,6 +175,14 @@ export interface FormProject {
     progress: FormProgress;
     /** How many entries the project already has (so `seq` can continue). */
     existingProgressCount: number;
+    /**
+     * The recorded rounds, newest first, for the read-only history block.
+     *
+     * Capped by {@link HISTORY_LIMIT}: a project with forty rounds does not need
+     * all forty in a form whose job is to add the forty-first, and an uncapped list
+     * would push the fields the colleague must fill below the fold.
+     */
+    history: FormHistoryEntry[];
     /**
      * The G4 conclusion block.
      *
@@ -219,6 +256,17 @@ export interface FormOptions {
  * empty one rather than `undefined`, so the generated script never has to guard.
  */
 export declare function projectForForm(record: PocRecord): FormProject;
+/** How many recorded rounds the form lists read-only. */
+export declare const HISTORY_LIMIT = 5;
+/**
+ * Flatten the recorded rounds for the read-only history block.
+ *
+ * Newest first, because the round a colleague is about to continue is the newest
+ * one: reading it first is what makes "这次什么变了" answerable. The order is
+ * reversed rather than re-sorted by date because the ledger's own array order is
+ * the append order, and a hand-edited `date` must not reshuffle history.
+ */
+export declare function progressHistory(progress: readonly ProgressRecord[]): FormHistoryEntry[];
 /** One empty progress entry, with `seq` continuing the existing count. */
 export declare function blankProgress(existingCount: number): FormProgress;
 /** The blank project a `blank`-mode form edits. */
@@ -317,17 +365,50 @@ export interface FormChangeSet {
             ready: string | null;
         };
     };
+    /**
+     * The G4 conclusion block.
+     *
+     * It was missing from the change set while the form could edit it, which meant a
+     * G4 colleague filled in "我们证明了什么 / 客户认可了什么 / 下一步业务动作",
+     * downloaded the file, and every one of those answers was silently dropped. The
+     * form showed the block; the serializer never wrote it. A G4 form could not
+     * record the only thing a G4 form exists to record.
+     */
+    outcome: {
+        achievement: string | null;
+        customer_recognition: string | null;
+        our_proof: string | null;
+        remaining_risks: string | null;
+        conclusion: {
+            proved: string | null;
+            recognized: string | null;
+            next_business: string | null;
+        };
+        business: {
+            milestone: string | null;
+            owner: string | null;
+            deadline: string | null;
+            status: string | null;
+        };
+        overall: string | null;
+    };
     /** The rounds this form ADDS; empty when the colleague recorded none. */
     progress: Array<Record<string, unknown>>;
 }
 /**
  * Build one project's change set from the form state.
  *
- * Every field the form can edit appears, so `poc-submit` can apply the whole
- * object with `setIfPresent` semantics: a blank field means "I did not change
- * this", which the merge step must not read as "delete it".
+ * Blocks outside the intent's scope are emitted as `null` (or an empty list), which
+ * `poc-submit` treats as "not changed" and skips. A blank field inside a block that
+ * IS in scope means the same thing: the colleague did not touch it.
+ *
+ * @param project the form's own view of the project
+ * @param intent what the colleague was asked to do; defaults to `supplement`, the
+ *        widest scope, so an older caller keeps its previous behaviour
+ * @param baseline the project's values when the form was generated. When given,
+ *        a field equal to its seed is emitted as `null` — "I did not touch this".
  */
-export declare function projectToChangeSet(project: FormProject): FormChangeSet;
+export declare function projectToChangeSet(project: FormProject, intent?: FormIntent, baseline?: FormProject): FormChangeSet;
 /** The whole download: one change set per project, plus provenance. */
 export interface FormChangeDocument {
     schemaVersion: string;
@@ -341,6 +422,15 @@ export declare function buildChangeDocument(options: {
     projects: readonly FormProject[];
     intent: FormIntent;
     now?: Date;
+    /**
+     * The values each project had when the form was GENERATED.
+     *
+     * When supplied, only fields that differ from their seed are emitted — so a
+     * colleague who opened a form, changed one field and sent it back cannot revert
+     * the other twenty to the day the form was exported. See
+     * {@link projectToChangeSet}.
+     */
+    baseline?: readonly FormProject[];
 }): FormChangeDocument;
 /** The enums, mirrored from `schemas/enums.yaml`. */
 declare const ENUMS: {
@@ -392,6 +482,14 @@ export interface FormPayload {
     today: string;
     projects: FormProject[];
     /**
+     * Each project's values at generation time, index-aligned with `projects`.
+     *
+     * The page compares against this before emitting a change set, so a field the
+     * colleague never touched is sent as "unchanged" rather than as its stale
+     * pre-filled value.
+     */
+    baseline: FormProject[];
+    /**
      * Per-project section resolution, index-aligned with `projects`.
      *
      * Resolved on the Host rather than in the page because the mapping is a
@@ -411,6 +509,15 @@ export interface FormPayload {
         label: string;
         hint: string;
     }>;
+    /**
+     * The returned page's stylesheet.
+     *
+     * It is shipped in the payload rather than referenced from the page script
+     * because the page script is generated code with no module scope: it cannot see
+     * a Host constant, and a first attempt that assumed otherwise threw
+     * "RETURN_CSS is not defined" at the moment a colleague clicked the button.
+     */
+    returnCss: string;
 }
 /**
  * Generate the complete HTML form.
@@ -456,3 +563,35 @@ export interface FormCompatibility {
  * point is to inspect a document whose shape may be from an older generation.
  */
 export declare function checkFormCompatibility(payload: unknown): FormCompatibility;
+/** The element id the returned page carries its change set in. */
+export declare const RETURN_DATA_ID = "poc-return-data";
+/** What reading a returned file produced. */
+export interface ReturnReadResult {
+    /** The change document, or `null` when the file could not be read. */
+    document: FormChangeDocument | null;
+    /** A message safe to show the person who sent the file back. */
+    reason: string;
+}
+/**
+ * Read a returned form — either the `.html` this generator emits or a `.json`
+ * change set — back into a change document.
+ *
+ * ## Why both formats, and why HTML is the default
+ *
+ * The documented workflow is "colleague fills it in and sends the HTML back on
+ * WeChat". That only works if the returned HTML actually carries the answers, so
+ * {@link buildFormHtml}'s page writes a `RETURN_DATA_ID` script block holding the
+ * exact change set. The same page is also readable by a human: it renders the
+ * answers as formatted HTML, so the person who receives it can see what was
+ * submitted before handing it to DSH.
+ *
+ * The `.json` path is kept because it is stricter and smaller, and because forms
+ * already in circulation emit it.
+ *
+ * ## Safety
+ *
+ * The HTML is never executed and never given to a DOM parser: the block is found
+ * with a string search and the slice is handed to `JSON.parse`. Nothing in the
+ * returned file can run.
+ */
+export declare function readReturnDocument(input: string): ReturnReadResult;

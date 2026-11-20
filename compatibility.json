@@ -4,7 +4,7 @@
   "verified": [
     {
       "dsh": "0.2.2-rc.5",
-      "verifiedAt": "2026-11-19",
+      "verifiedAt": "2026-11-20",
       "result": "passed",
       "checks": [
         "command: dsh --version -> exit 0",
@@ -45,7 +45,7 @@
         "cache-wiped-on-restart",
         "api-refresh-after-restart"
       ],
-      "notes": "Isolated non-Desktop profile; packed tarball @skillre/dsh-plugin-work-dashboard@0.11.0 (sha256 88e11c97c573a11c...). Scope: Host mount, Connection route, cache lifecycle, risk board, global timeline, blocker aggregation, export-form generation, bundled skill registration, and owned-profile cleanup. NOT covered by this run: any Client UI check — no browser was driven. Browser UI check added 2026-11-20: tests/browser-text.spec.ts renders the real DetailPage against a git-backed ledger, loads it in headless Chrome at 1440px and compares scrollHeight to clientHeight on every data-prose card. 18 cards across 9 projects, 0 clipped; white-space resolves to pre-wrap and line-clamp to none. The check was mutation-tested: reintroducing the removed three-line clamp makes it fail with measured hidden pixel counts, so it detects the regression it exists to catch."
+      "notes": "Isolated non-Desktop profile; packed tarball @skillre/dsh-plugin-work-dashboard@0.11.1 (sha256 6a2a889bf603d6b8...). Scope: Host mount, Connection route, cache lifecycle, risk board, global timeline, blocker aggregation, export-form generation, bundled skill registration, and owned-profile cleanup. Re-run on 2026-11-20 after the export-form return-file work: 35 checks, export-form generation exercised (111123 bytes, fill mode). Client UI: tests/browser-text.spec.ts renders the real DetailPage against a git-backed ledger in headless Chrome at 1440px and compares scrollHeight to clientHeight on every data-prose card (18 cards / 9 projects, 0 clipped; mutation-tested). Generated-form UI: the collection form was driven in headless Chrome at 1440px and 390px (no horizontal overflow; mobile banner/snapshot verified), and the download/return-file paths were exercised end to end in a real browser. NOT covered: the DSH Electron Desktop client shell."
     },
     {
       "dsh": "0.2.2-rc.2",

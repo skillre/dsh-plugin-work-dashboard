@@ -1,16 +1,16 @@
 ---
 name: poc-submit
-description: 校验组员交回的 POC 数据文件（.json），合并进 v3 YAML 后提交为 Draft PR 到 GitHub workbranch 仓库。当用户说「把这个文件提交上去」「导入组员填的数据」「帮我提个 PR」或发来 poc-changes-*.json 时使用。
+description: 校验组员交回的 POC 回传文件（.html 或 .json），合并进 v3 YAML 后提交为 Draft PR 到 GitHub workbranch 仓库。当用户说「把这个文件提交上去」「导入组员填的数据」「帮我提个 PR」或发来 poc-return-*.html / poc-changes-*.json 时使用。
 ---
 
 # 导入并提交 POC 数据（v3）
 
-处理组员交回的 `poc-changes-<日期>.json`：校验 → 合并进现有 v3 YAML → 提交 Draft PR。
+处理组员交回的**回传文件**：校验 → 合并进现有 v3 YAML → 提交 Draft PR。
 
 ## 数据流
 
 ```
-组员填 HTML → 下载 poc-changes-*.json → 用飞书发给你
+组员填 HTML → 点【生成回传文件】→ 得到 poc-return-*.html → 企业微信发给你
       ↓
 你交给 DSH → 本 skill
       ↓
@@ -18,6 +18,40 @@ description: 校验组员交回的 POC 数据文件（.json），合并进 v3 YA
       ↓
 审核 → 你 merge
 ```
+
+## 两种回传文件，等价
+
+| 文件 | 怎么来的 | 怎么读 |
+|---|---|---|
+| `poc-return-<日期>.html`（**推荐**） | 表单里点【生成回传文件 (.html)】 | `readReturnDocument(html)` |
+| `poc-changes-<日期>.json` | 表单里点【下载变更集 (.json)】 | `readReturnDocument(json)`，或直接 `JSON.parse` |
+
+**为什么推荐 HTML**：发起人和组员都能双击打开、直接看到填了什么，不需要 JSON 阅读器；
+同时它内嵌了与 `.json` 完全相同的变更集，DSH 解析出来一模一样。
+
+两者都只含**人填写的字段**。HTML 里的数据块是**只读快照**（`<script type="application/json">`），
+只被 `JSON.parse` 读取，**不会执行任何代码**。
+
+### 读回传文件
+
+```js
+import { readReturnDocument } from '@skillre/dsh-plugin-work-dashboard/lib/form.js'
+
+const result = readReturnDocument(await readFile(file, 'utf8'))
+if (result.document === null) throw new Error(result.reason)   // reason 是给人看的中文说明
+const { intent, changes } = result.document
+```
+
+`readReturnDocument` 已经处理了三种常见错误，直接把 `reason` 告诉用户即可：
+
+| 交回的东西 | 返回的 reason 含义 |
+|---|---|
+| 原始空白表单（组员忘了点生成） | 「这是尚未填写/未生成回传文件的原始表单」 |
+| v3.0 旧表单 | 说明会丢失场景/指标引用，要求重新导出 |
+| 被截断/改坏的文件 | 解析失败 |
+
+**不要自己去正则抠 HTML 里的 JSON**——空白表单里也含有同一个标记字符串（页面脚本的源码），
+自己抠会抠到源码那份，得出「文件损坏」的错误结论。
 
 ## 组员交回的 JSON 结构
 
@@ -95,6 +129,26 @@ description: 校验组员交回的 POC 数据文件（.json），合并进 v3 YA
 | `new` | 新建项目 | 整个文件都是新的，派生字段由 CI 首次计算 |
 | `supplement` | 补充当前阶段 | 只合并 `changes[].*` 里非 null 的字段 |
 | `progress` | 只记录了一轮进展 | 只有 `progress[]` 非空，其余字段应全部为 null |
+
+### 变更集是「按意图裁剪」的，这是故意的
+
+表单**只写组员在那个页面上真的能改的块**，其余块一律输出 `null` / 空数组：
+
+| intent | 会写 | 不写（全为 null/空） |
+|---|---|---|
+| `new` | `identity`、`gate0` | `plan`、`outcome`、`progress` |
+| `supplement` | 当前阶段及其**之前**的块（按 stage 解析） | 之后的阶段、以及未涉及的块 |
+| `progress` | **只有** `progress[]` | 其余全部 |
+
+例：一个 G0 项目的 `supplement` 变更集里，`plan.customer_pain` 一定是 `null`，
+即使表单导出时台账里已有值——因为那个页面上计划是只读的。
+
+**这不是缺陷，而是防止覆盖的机制**：表单会从台账预填所有字段，若把没编辑过的预填值也发回，
+合并时就会把「导出之后别人改过的值」悄悄回滚成「导出那天的快照」。
+所以合并时**必须跳过 null**，并且**不要**因为某个块是 null 就认为组员「清空了它」。
+
+两个例外：`stage` 和 `status` **总是**带上，因为它们是台账的路由键，
+且新建项目没有既有文件可继承。它们由评审流程维护，不会被组员在表单里改动。
 
 ## 处理步骤
 
